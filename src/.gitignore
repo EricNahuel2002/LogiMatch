@@ -1,0 +1,68 @@
+# See https://aka.ms/dotnet-gitignore
+
+# General
+/.vs
+/.mvn
+
+# NuGet restore packages
+**/bin/
+**/obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDE specific
+*.ide
+*.ide.code-workspace
+
+# .NET Tools
+%.User
+
+# MSTest test Results
+[Tt]est*/Debug/*
+
+# OpenCover UI test filter configuration
+opencover.configuration.xml
+
+# Coverlet
+**/coverage/
+
+# Entity Framework
+*.edmx
+*.edml
+
+# SQL Server
+*.mdf
+*.ldf
+*.ndf
+
+# SQLite
+*.s3db
+
+# Datadog
+datadog.yaml
+
+# Rider
+.idea/
+*.iws
+
+# Windows thumbnails cache
+Thumbs.db
+ehthumbs.db
+
+# Files that macOS creates
+.DS_Store
+.AppleDouble
+.LSColor
+
+# File tracking for git-lfs
+.gitattributes
+
+# Binary file patterns
+*.7z
+*.tar.xz
+*.tgz
+*.zip
