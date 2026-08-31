@@ -1,0 +1,55 @@
+services:
+  # API Service
+  apimatch:
+    build:
+      context: .
+      dockerfile: src/API/Dockerfile
+      target: runtime
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlmatch;Database=LogiMatchDB;User Id=sa;Password=LogiMatch@2026;TrustServerCertificate=True;
+    depends_on:
+      sqlmatch:
+        condition: service_started
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # SQL Server
+  sqlmatch:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - SA_PASSWORD=LogiMatch@2026
+      - ACCEPT_EULA=Y
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlmatch_data:/var/opt/mssql
+
+  # Unit Tests (run on demand)
+  unittests:
+    build:
+      context: .
+      dockerfile: src/UnitTests/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  # Integration Tests (run on demand)
+  integrationtests:
+    build:
+      context: .
+      dockerfile: src/IntegrationTests/Dockerfile
+    depends_on:
+      sqlmatch:
+        condition: service_started
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlmatch;Database=LogiMatchDB;User Id=sa;Password=LogiMatch@2026;TrustServerCertificate=True;
+
+volumes:
+  sqlmatch_data:
