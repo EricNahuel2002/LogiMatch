@@ -13,6 +13,8 @@ public class LogiMatchDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<DeliveryAttempt> DeliveryAttempts => Set<DeliveryAttempt>();
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentHistory> ShipmentHistory => Set<ShipmentHistory>();
     public DbSet<Route> Routes => Set<Route>();

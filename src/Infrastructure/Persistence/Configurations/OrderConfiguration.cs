@@ -10,10 +10,6 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
     {
         builder.ToTable("Orders");
 
-        builder.Property(o => o.Name).HasMaxLength(200).IsRequired();
-        builder.Property(o => o.Price).HasColumnType("decimal(18,2)").IsRequired();
-        builder.Property(o => o.Quantity).IsRequired();
-
         builder.HasOne(o => o.Customer)
             .WithMany(c => c.Orders)
             .HasForeignKey(o => o.CustomerId)

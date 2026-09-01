@@ -4,10 +4,6 @@ namespace Domain.Entities;
 
 public class Order : BaseEntity
 {
-    public string Name { get; set; } = string.Empty;
-    public decimal Price { get; set; }
-    public int Quantity { get; set; }
-
     public Guid CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;
 
@@ -19,4 +15,7 @@ public class Order : BaseEntity
 
     public Guid? ShipmentId { get; set; }
     public Shipment? Shipment { get; set; }
+
+    public ICollection<OrderItem> Items { get; set; } = [];
+    public ICollection<DeliveryAttempt> DeliveryAttempts { get; set; } = [];
 }
