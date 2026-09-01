@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend (Oracle Cloud)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fallo intencionado: el despliegue aún no está configurado.
+      # El esqueleto real de Oracle Cloud se habilitará cuando la aplicación esté lista.
+      - name: Guard Deployment Not Configured
+        run: |
+          echo "::error::Backend deployment is not configured yet."
+          exit 1
+
+      # Esqueleto de despliegue en Oracle Cloud VM (se habilita más adelante).
+      # Requiere los siguientes secrets de GitHub:
+      #   ORACLE_HOST, ORACLE_USER, ORACLE_SSH_KEY, ORACLE_PORT
+      # - name: Deploy API to Oracle VM
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.ORACLE_HOST }}
+      #     username: ${{ secrets.ORACLE_USER }}
+      #     key: ${{ secrets.ORACLE_SSH_KEY }}
+      #     port: ${{ secrets.ORACLE_PORT }}
+      #     script: |
+      #       cd /opt/logimatch
+      #       docker compose pull api
+      #       docker compose up -d --no-deps api
+
+  deploy-frontend:
+    name: Deploy Frontend (Vercel) [placeholder]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Placeholder: aún no existe frontend en el repositorio.
+      # Cuando exista, se habilitará una step como la siguiente:
+      # - name: Deploy to Vercel
+      #   uses: amondnet/vercel-action@v20
+      #   with:
+      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Notify Frontend Pending
+        run: echo "Frontend deployment is pending until a frontend project exists."
