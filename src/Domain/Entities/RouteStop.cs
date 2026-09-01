@@ -9,6 +9,6 @@ public class RouteStop : BaseEntity
     public Route Route { get; set; } = null!;
 
     public string Name { get; set; } = string.Empty;
-    public Coordinate Coordinate { get; set; }
+    public Coordinate Coordinate { get; set; } = new(0, 0);
     public int StopOrder { get; set; }
 }
