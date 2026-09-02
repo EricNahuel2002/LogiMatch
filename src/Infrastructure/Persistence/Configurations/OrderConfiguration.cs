@@ -24,10 +24,5 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .WithMany(d => d.Orders)
             .HasForeignKey(o => o.AssignedDriverId)
             .OnDelete(DeleteBehavior.SetNull);
-
-        builder.HasOne(o => o.Shipment)
-            .WithMany(s => s.Orders)
-            .HasForeignKey(o => o.ShipmentId)
-            .OnDelete(DeleteBehavior.SetNull);
     }
 }

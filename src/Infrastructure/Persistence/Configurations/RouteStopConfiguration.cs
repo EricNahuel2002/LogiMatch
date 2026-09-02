@@ -10,13 +10,20 @@ public class RouteStopConfiguration : IEntityTypeConfiguration<RouteStop>
     {
         builder.ToTable("RouteStops");
 
-        builder.Property(rs => rs.Name).HasMaxLength(200).IsRequired();
+        builder.Property(rs => rs.Name).HasMaxLength(200);
         builder.Property(rs => rs.StopOrder).IsRequired();
+
+        builder.HasIndex(rs => rs.ShipmentId).IsUnique();
 
         builder.OwnsOne(rs => rs.Coordinate, o =>
         {
             o.Property(c => c.Latitude).HasColumnType("decimal(9,6)");
             o.Property(c => c.Longitude).HasColumnType("decimal(9,6)");
         });
+
+        builder.HasOne(rs => rs.Shipment)
+            .WithOne()
+            .HasForeignKey<RouteStop>(rs => rs.ShipmentId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

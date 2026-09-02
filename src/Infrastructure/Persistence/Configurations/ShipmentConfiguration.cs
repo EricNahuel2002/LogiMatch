@@ -15,19 +15,9 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
             .HasMaxLength(20)
             .IsRequired();
 
-        builder.HasOne(s => s.Route)
-            .WithMany()
-            .HasForeignKey(s => s.RouteId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne(s => s.Driver)
-            .WithMany(d => d.Shipments)
-            .HasForeignKey(s => s.DriverId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne(s => s.Vehicle)
-            .WithMany(v => v.Shipments)
-            .HasForeignKey(s => s.VehicleId)
+        builder.HasOne(s => s.Order)
+            .WithOne(o => o.Shipment)
+            .HasForeignKey<Shipment>(s => s.OrderId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(s => s.History)

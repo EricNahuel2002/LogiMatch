@@ -14,53 +14,22 @@ public class Shipment : BaseEntity
 
     public ShipmentStatus Status { get; private set; } = ShipmentStatus.Pending;
 
-    public Guid? RouteId { get; private set; }
-    public Route? Route { get; private set; }
-
-    public Guid? DriverId { get; private set; }
-    public Driver? Driver { get; private set; }
-
-    public Guid? VehicleId { get; private set; }
-    public Vehicle? Vehicle { get; private set; }
+    public Guid OrderId { get; private set; }
+    public Order Order { get; private set; } = null!;
 
     public bool ArrivedAtDestination { get; private set; }
 
-    public ICollection<Order> Orders { get; private set; } = [];
     public ICollection<DeliveryAttempt> DeliveryAttempts { get; private set; } = [];
     public ICollection<ShipmentHistory> History { get; private set; } = [];
 
-    public static Shipment Create() => new();
-
-    public void AssignRoute(Route route)
-    {
-        ArgumentNullException.ThrowIfNull(route);
-        EnsurePending();
-        RouteId = route.Id;
-        Route = route;
-    }
-
-    public void AssignDriver(Driver driver)
-    {
-        ArgumentNullException.ThrowIfNull(driver);
-        EnsurePending();
-        DriverId = driver.Id;
-        Driver = driver;
-    }
-
-    public void AssignVehicle(Vehicle vehicle)
-    {
-        ArgumentNullException.ThrowIfNull(vehicle);
-        EnsurePending();
-        VehicleId = vehicle.Id;
-        Vehicle = vehicle;
-    }
-
-    public void AddOrder(Order order)
+    public static Shipment Create(Order order)
     {
         ArgumentNullException.ThrowIfNull(order);
-        EnsurePending();
-        order.AssignToShipment(this);
-        Orders.Add(order);
+        var shipment = new Shipment();
+        order.AssignToShipment(shipment);
+        shipment.OrderId = order.Id;
+        shipment.Order = order;
+        return shipment;
     }
 
     public void Start()
@@ -69,12 +38,6 @@ public class Shipment : BaseEntity
         {
             throw new InvalidOperationException(
                 $"A shipment can only be started while pending. Current status: {Status}.");
-        }
-
-        if (Route is null || Driver is null || Vehicle is null || !Vehicle.Active || Orders.Count == 0)
-        {
-            throw new InvalidOperationException(
-                "A shipment requires a route, an active vehicle, a driver and at least one order to start.");
         }
 
         Status = ShipmentStatus.InProgress;
@@ -133,19 +96,11 @@ public class Shipment : BaseEntity
     }
 
     public void RegisterDeliveryAttempt(
-        Order order,
         RouteStop? routeStop,
         bool succeeded,
         string? note = null,
         DateTime? attemptedAt = null)
     {
-        ArgumentNullException.ThrowIfNull(order);
-
-        if (order.ShipmentId != Id)
-        {
-            throw new InvalidOperationException("The order does not belong to this shipment.");
-        }
-
         if (Status != ShipmentStatus.Arrived)
         {
             throw new InvalidOperationException(
@@ -169,9 +124,9 @@ public class Shipment : BaseEntity
             ? 1
             : DeliveryAttempts.Max(a => a.AttemptNumber) + 1;
 
-        var attempt = DeliveryAttempt.Create(order, this, routeStop, attemptNumber, timestamp, succeeded, note);
+        var attempt = DeliveryAttempt.Create(Order, this, routeStop, attemptNumber, timestamp, succeeded, note);
         DeliveryAttempts.Add(attempt);
-        order.DeliveryAttempts.Add(attempt);
+        Order.DeliveryAttempts.Add(attempt);
 
         AddHistory(
             ShipmentStatus.Arrived,
@@ -210,14 +165,6 @@ public class Shipment : BaseEntity
             Note = note,
             RecordedAt = DateTime.UtcNow
         });
-    }
-
-    private void EnsurePending()
-    {
-        if (Status != ShipmentStatus.Pending)
-        {
-            throw new InvalidOperationException("Shipment assignments can only be changed while the shipment is pending.");
-        }
     }
 
     private void EnsureInProgress()

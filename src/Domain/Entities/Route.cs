@@ -5,8 +5,51 @@ namespace Domain.Entities;
 
 public class Route : BaseEntity
 {
-    public Coordinate Origin { get; set; } = new(0, 0);
-    public Coordinate Destination { get; set; } = new(0, 0);
+    private Route()
+    {
+    }
 
-    public ICollection<RouteStop> RouteStops { get; set; } = [];
+    public Coordinate Origin { get; private set; } = new(0, 0);
+
+    public Guid? DriverId { get; private set; }
+    public Driver? Driver { get; private set; }
+
+    public Guid? VehicleId { get; private set; }
+    public Vehicle? Vehicle { get; private set; }
+
+    public ICollection<RouteStop> RouteStops { get; private set; } = [];
+
+    public static Route Create(Coordinate origin) => new() { Origin = origin };
+
+    public void AssignDriver(Driver driver)
+    {
+        ArgumentNullException.ThrowIfNull(driver);
+        DriverId = driver.Id;
+        Driver = driver;
+    }
+
+    public void AssignVehicle(Vehicle vehicle)
+    {
+        ArgumentNullException.ThrowIfNull(vehicle);
+        VehicleId = vehicle.Id;
+        Vehicle = vehicle;
+    }
+
+    public void AddStop(RouteStop routeStop)
+    {
+        ArgumentNullException.ThrowIfNull(routeStop);
+
+        if (routeStop.StopOrder <= 0)
+        {
+            throw new ArgumentException("Stop order must be greater than zero.", nameof(routeStop));
+        }
+
+        if (RouteStops.Any(rs => rs.StopOrder == routeStop.StopOrder))
+        {
+            throw new InvalidOperationException(
+                $"A route cannot have two stops with the same order ({routeStop.StopOrder}).");
+        }
+
+        RouteStops.Add(routeStop);
+    }
 }

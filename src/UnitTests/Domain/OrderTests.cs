@@ -30,30 +30,30 @@ public class OrderTests
     }
 
     [Fact]
-    public void AddItem_WhenAssignedToShipment_Throws()
+    public void AddItem_WhenDispatched_Throws()
     {
         var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]);
-        order.AssignToShipment(Shipment.Create());
+        Shipment.Create(order);
 
         Assert.Throws<InvalidOperationException>(
             () => order.AddItem(OrderItem.Create("Item 2", 20m, 2)));
     }
 
     [Fact]
-    public void SetAssignedDriver_WhenAssignedToShipment_Throws()
+    public void SetAssignedDriver_WhenDispatched_Throws()
     {
         var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]);
-        order.AssignToShipment(Shipment.Create());
+        Shipment.Create(order);
 
         Assert.Throws<InvalidOperationException>(() => order.SetAssignedDriver(Guid.NewGuid()));
     }
 
     [Fact]
-    public void AssignToShipment_WhenAlreadyAssigned_Throws()
+    public void CreateShipment_WhenAlreadyAssigned_Throws()
     {
         var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]);
-        order.AssignToShipment(Shipment.Create());
+        Shipment.Create(order);
 
-        Assert.Throws<InvalidOperationException>(() => order.AssignToShipment(Shipment.Create()));
+        Assert.Throws<InvalidOperationException>(() => Shipment.Create(order));
     }
 }

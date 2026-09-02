@@ -15,7 +15,6 @@ public class Vehicle : BaseEntity
     public bool Active { get; private set; } = true;
 
     public ICollection<Driver> Drivers { get; private set; } = [];
-    public ICollection<Shipment> Shipments { get; private set; } = [];
 
     public static Vehicle Create(string licensePlate, decimal capacityKg, string? brand = null, string? model = null)
     {

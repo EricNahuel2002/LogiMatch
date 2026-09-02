@@ -61,18 +61,13 @@ public class Order : BaseEntity
         AssignedDriverId = driverId;
     }
 
-    public void AssignToShipment(Shipment shipment)
+    internal void AssignToShipment(Shipment shipment)
     {
         ArgumentNullException.ThrowIfNull(shipment);
 
         if (ShipmentId.HasValue)
         {
             throw new InvalidOperationException("The order is already assigned to a shipment.");
-        }
-
-        if (Items.Count == 0)
-        {
-            throw new InvalidOperationException("An order requires at least one item to be dispatched.");
         }
 
         ShipmentId = shipment.Id;

@@ -58,11 +58,11 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OrderId");
+
                     b.HasIndex("RouteStopId");
 
-                    b.HasIndex("ShipmentId");
-
-                    b.HasIndex("OrderId", "AttemptNumber")
+                    b.HasIndex("ShipmentId", "AttemptNumber")
                         .IsUnique();
 
                     b.ToTable("DeliveryAttempts", (string)null);
@@ -99,8 +99,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatedByAdminId");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("ShipmentId");
 
                     b.ToTable("Orders", (string)null);
                 });
@@ -147,10 +145,20 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("VehicleId");
 
                     b.ToTable("Routes", (string)null);
                 });
@@ -165,11 +173,13 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Name")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<Guid>("RouteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ShipmentId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("StopOrder")
@@ -181,6 +191,9 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("RouteId");
+
+                    b.HasIndex("ShipmentId")
+                        .IsUnique();
 
                     b.ToTable("RouteStops", (string)null);
                 });
@@ -197,10 +210,7 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("DriverId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("RouteId")
+                    b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
@@ -211,16 +221,10 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("VehicleId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("DriverId");
-
-                    b.HasIndex("RouteId");
-
-                    b.HasIndex("VehicleId");
+                    b.HasIndex("OrderId")
+                        .IsUnique();
 
                     b.ToTable("Shipments", (string)null);
                 });
@@ -435,18 +439,11 @@ namespace Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Domain.Entities.Shipment", "Shipment")
-                        .WithMany("Orders")
-                        .HasForeignKey("ShipmentId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("AssignedDriver");
 
                     b.Navigation("CreatedBy");
 
                     b.Navigation("Customer");
-
-                    b.Navigation("Shipment");
                 });
 
             modelBuilder.Entity("Domain.Entities.OrderItem", b =>
@@ -462,24 +459,15 @@ namespace Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Domain.Entities.Route", b =>
                 {
-                    b.OwnsOne("Domain.ValueObjects.Coordinate", "Destination", b1 =>
-                        {
-                            b1.Property<Guid>("RouteId")
-                                .HasColumnType("uniqueidentifier");
+                    b.HasOne("Domain.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                            b1.Property<decimal>("Latitude")
-                                .HasColumnType("decimal(9,6)");
-
-                            b1.Property<decimal>("Longitude")
-                                .HasColumnType("decimal(9,6)");
-
-                            b1.HasKey("RouteId");
-
-                            b1.ToTable("Routes");
-
-                            b1.WithOwner()
-                                .HasForeignKey("RouteId");
-                        });
+                    b.HasOne("Domain.Entities.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.OwnsOne("Domain.ValueObjects.Coordinate", "Origin", b1 =>
                         {
@@ -500,11 +488,12 @@ namespace Infrastructure.Persistence.Migrations
                                 .HasForeignKey("RouteId");
                         });
 
-                    b.Navigation("Destination")
-                        .IsRequired();
+                    b.Navigation("Driver");
 
                     b.Navigation("Origin")
                         .IsRequired();
+
+                    b.Navigation("Vehicle");
                 });
 
             modelBuilder.Entity("Domain.Entities.RouteStop", b =>
@@ -512,6 +501,12 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasOne("Domain.Entities.Route", "Route")
                         .WithMany("RouteStops")
                         .HasForeignKey("RouteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Entities.Shipment", "Shipment")
+                        .WithOne()
+                        .HasForeignKey("Domain.Entities.RouteStop", "ShipmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -538,30 +533,19 @@ namespace Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Route");
+
+                    b.Navigation("Shipment");
                 });
 
             modelBuilder.Entity("Domain.Entities.Shipment", b =>
                 {
-                    b.HasOne("Domain.Entities.Driver", "Driver")
-                        .WithMany("Shipments")
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.HasOne("Domain.Entities.Order", "Order")
+                        .WithOne("Shipment")
+                        .HasForeignKey("Domain.Entities.Shipment", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.HasOne("Domain.Entities.Route", "Route")
-                        .WithMany()
-                        .HasForeignKey("RouteId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Entities.Vehicle", "Vehicle")
-                        .WithMany("Shipments")
-                        .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Driver");
-
-                    b.Navigation("Route");
-
-                    b.Navigation("Vehicle");
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("Domain.Entities.ShipmentHistory", b =>
@@ -602,6 +586,8 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("DeliveryAttempts");
 
                     b.Navigation("Items");
+
+                    b.Navigation("Shipment");
                 });
 
             modelBuilder.Entity("Domain.Entities.Route", b =>
@@ -614,13 +600,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("DeliveryAttempts");
 
                     b.Navigation("History");
-
-                    b.Navigation("Orders");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Vehicle", b =>
-                {
-                    b.Navigation("Shipments");
                 });
 
             modelBuilder.Entity("Domain.Entities.Admin", b =>
@@ -636,8 +615,6 @@ namespace Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Domain.Entities.Driver", b =>
                 {
                     b.Navigation("Orders");
-
-                    b.Navigation("Shipments");
                 });
 #pragma warning restore 612, 618
         }

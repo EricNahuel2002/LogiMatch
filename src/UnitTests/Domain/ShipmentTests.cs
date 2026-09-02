@@ -6,100 +6,48 @@ namespace UnitTests.Domain;
 
 public class ShipmentTests
 {
-    private readonly Vehicle _vehicle = Vehicle.Create("ABC123", 1000m);
-    private readonly Driver _driver = new();
-    private readonly Route _route = new Route
-    {
-        Origin = new Coordinate(10, 10),
-        Destination = new Coordinate(20, 20)
-    };
     private readonly Order _order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]);
 
-    private Shipment BuildPendingShipment()
+    [Fact]
+    public void Create_LinksSingleOrder()
     {
-        var shipment = Shipment.Create();
-        shipment.AssignRoute(_route);
-        shipment.AssignDriver(_driver);
-        shipment.AssignVehicle(_vehicle);
-        shipment.AddOrder(_order);
-        return shipment;
+        var shipment = Shipment.Create(_order);
+
+        Assert.Equal(_order.Id, shipment.OrderId);
+        Assert.Equal(shipment.Id, _order.ShipmentId);
     }
 
     [Fact]
-    public void Start_WithoutRoute_Throws()
+    public void Create_WhenOrderAlreadyAssigned_Throws()
     {
-        var shipment = Shipment.Create();
-        shipment.AssignDriver(_driver);
-        shipment.AssignVehicle(_vehicle);
-        shipment.AddOrder(_order);
+        var first = Shipment.Create(_order);
 
-        Assert.Throws<InvalidOperationException>(() => shipment.Start());
+        Assert.Throws<InvalidOperationException>(() => Shipment.Create(_order));
     }
 
     [Fact]
-    public void Start_WithoutDriver_Throws()
+    public void Start_SetsInProgress()
     {
-        var shipment = Shipment.Create();
-        shipment.AssignRoute(_route);
-        shipment.AssignVehicle(_vehicle);
-        shipment.AddOrder(_order);
-
-        Assert.Throws<InvalidOperationException>(() => shipment.Start());
-    }
-
-    [Fact]
-    public void Start_WithoutVehicle_Throws()
-    {
-        var shipment = Shipment.Create();
-        shipment.AssignRoute(_route);
-        shipment.AssignDriver(_driver);
-        shipment.AddOrder(_order);
-
-        Assert.Throws<InvalidOperationException>(() => shipment.Start());
-    }
-
-    [Fact]
-    public void Start_WithInactiveVehicle_Throws()
-    {
-        _vehicle.SetActive(false);
-        var shipment = BuildPendingShipment();
-
-        try
-        {
-            Assert.Throws<InvalidOperationException>(() => shipment.Start());
-        }
-        finally
-        {
-            _vehicle.SetActive(true);
-        }
-    }
-
-    [Fact]
-    public void Start_WithoutOrders_Throws()
-    {
-        var shipment = Shipment.Create();
-        shipment.AssignRoute(_route);
-        shipment.AssignDriver(_driver);
-        shipment.AssignVehicle(_vehicle);
-
-        Assert.Throws<InvalidOperationException>(() => shipment.Start());
-    }
-
-    [Fact]
-    public void Start_WhenFullyConfigured_SetsInProgress()
-    {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
 
         shipment.Start();
 
         Assert.Equal(ShipmentStatus.InProgress, shipment.Status);
-        Assert.Single(shipment.History);
+    }
+
+    [Fact]
+    public void Start_WhenNotPending_Throws()
+    {
+        var shipment = Shipment.Create(_order);
+        shipment.Start();
+
+        Assert.Throws<InvalidOperationException>(() => shipment.Start());
     }
 
     [Fact]
     public void Stop_WhenInProgress_SetsStopped()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
         shipment.Start();
 
         shipment.Stop();
@@ -110,7 +58,7 @@ public class ShipmentTests
     [Fact]
     public void Stop_WhenNotInProgress_Throws()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
 
         Assert.Throws<InvalidOperationException>(() => shipment.Stop());
     }
@@ -118,7 +66,7 @@ public class ShipmentTests
     [Fact]
     public void Resume_WhenStopped_SetsInProgress()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
         shipment.Start();
         shipment.Stop();
 
@@ -130,7 +78,7 @@ public class ShipmentTests
     [Fact]
     public void Resume_WhenNotStopped_Throws()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
         shipment.Start();
 
         Assert.Throws<InvalidOperationException>(() => shipment.Resume());
@@ -139,7 +87,7 @@ public class ShipmentTests
     [Fact]
     public void MarkArrivedAtDestination_WhenInProgress_SetsArrived()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
         shipment.Start();
 
         shipment.MarkArrivedAtDestination();
@@ -151,7 +99,7 @@ public class ShipmentTests
     [Fact]
     public void MarkArrivedAtDestination_WhenNotInProgress_Throws()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
         shipment.Start();
         shipment.Stop();
 
@@ -159,18 +107,9 @@ public class ShipmentTests
     }
 
     [Fact]
-    public void Start_WhenCancelled_Throws()
-    {
-        var shipment = BuildPendingShipment();
-        shipment.Cancel();
-
-        Assert.Throws<InvalidOperationException>(() => shipment.Start());
-    }
-
-    [Fact]
     public void Cancel_WhenArrivedAtDestination_Throws()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
         shipment.Start();
         shipment.MarkArrivedAtDestination();
 
@@ -180,7 +119,7 @@ public class ShipmentTests
     [Fact]
     public void Cancel_WhenPending_SetsCancelled()
     {
-        var shipment = BuildPendingShipment();
+        var shipment = Shipment.Create(_order);
 
         shipment.Cancel();
 

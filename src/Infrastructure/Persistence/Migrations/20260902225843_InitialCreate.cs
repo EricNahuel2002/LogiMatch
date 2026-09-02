@@ -12,23 +12,6 @@ namespace Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Routes",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Origin_Latitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
-                    Origin_Longitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
-                    Destination_Latitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
-                    Destination_Longitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Routes", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -55,6 +38,7 @@ namespace Infrastructure.Persistence.Migrations
                     Brand = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     Model = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     CapacityKg = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Active = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
@@ -64,27 +48,38 @@ namespace Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "RouteStops",
+                name: "Orders",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    RouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Coordinate_Latitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
-                    Coordinate_Longitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
-                    StopOrder = table.Column<int>(type: "int", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedByAdminId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AssignedDriverId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ShipmentId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_RouteStops", x => x.Id);
+                    table.PrimaryKey("PK_Orders", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_RouteStops_Routes_RouteId",
-                        column: x => x.RouteId,
-                        principalTable: "Routes",
+                        name: "FK_Orders_Users_AssignedDriverId",
+                        column: x => x.AssignedDriverId,
+                        principalTable: "Users",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Orders_Users_CreatedByAdminId",
+                        column: x => x.CreatedByAdminId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Orders_Users_CustomerId",
+                        column: x => x.CustomerId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -112,12 +107,12 @@ namespace Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Shipments",
+                name: "Routes",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    RouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Origin_Latitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
+                    Origin_Longitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
                     DriverId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     VehicleId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -125,21 +120,15 @@ namespace Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Shipments", x => x.Id);
+                    table.PrimaryKey("PK_Routes", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Shipments_Routes_RouteId",
-                        column: x => x.RouteId,
-                        principalTable: "Routes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Shipments_Users_DriverId",
+                        name: "FK_Routes_Users_DriverId",
                         column: x => x.DriverId,
                         principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_Shipments_Vehicles_VehicleId",
+                        name: "FK_Routes_Vehicles_VehicleId",
                         column: x => x.VehicleId,
                         principalTable: "Vehicles",
                         principalColumn: "Id",
@@ -147,47 +136,117 @@ namespace Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Orders",
+                name: "OrderItems",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OrderId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     Price = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Quantity = table.Column<int>(type: "int", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    CreatedByAdminId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    AssignedDriverId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    ShipmentId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Orders", x => x.Id);
+                    table.PrimaryKey("PK_OrderItems", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Orders_Shipments_ShipmentId",
+                        name: "FK_OrderItems_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Shipments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    OrderId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ArrivedAtDestination = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Shipments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Shipments_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RouteStops",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ShipmentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Coordinate_Latitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
+                    Coordinate_Longitude = table.Column<decimal>(type: "decimal(9,6)", nullable: false),
+                    StopOrder = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RouteStops", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RouteStops_Routes_RouteId",
+                        column: x => x.RouteId,
+                        principalTable: "Routes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_RouteStops_Shipments_ShipmentId",
                         column: x => x.ShipmentId,
                         principalTable: "Shipments",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DeliveryAttempts",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OrderId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ShipmentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RouteStopId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    AttemptNumber = table.Column<int>(type: "int", nullable: false),
+                    AttemptedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Succeeded = table.Column<bool>(type: "bit", nullable: false),
+                    Note = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DeliveryAttempts", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Orders_Users_AssignedDriverId",
-                        column: x => x.AssignedDriverId,
-                        principalTable: "Users",
+                        name: "FK_DeliveryAttempts_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Orders_Users_CreatedByAdminId",
-                        column: x => x.CreatedByAdminId,
-                        principalTable: "Users",
+                        name: "FK_DeliveryAttempts_RouteStops_RouteStopId",
+                        column: x => x.RouteStopId,
+                        principalTable: "RouteStops",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_Orders_Users_CustomerId",
-                        column: x => x.CustomerId,
-                        principalTable: "Users",
+                        name: "FK_DeliveryAttempts_Shipments_ShipmentId",
+                        column: x => x.ShipmentId,
+                        principalTable: "Shipments",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -221,9 +280,30 @@ namespace Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_DeliveryAttempts_OrderId",
+                table: "DeliveryAttempts",
+                column: "OrderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeliveryAttempts_RouteStopId",
+                table: "DeliveryAttempts",
+                column: "RouteStopId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeliveryAttempts_ShipmentId_AttemptNumber",
+                table: "DeliveryAttempts",
+                columns: new[] { "ShipmentId", "AttemptNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DriverVehicle_VehiclesId",
                 table: "DriverVehicle",
                 column: "VehiclesId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OrderItems_OrderId",
+                table: "OrderItems",
+                column: "OrderId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Orders_AssignedDriverId",
@@ -241,14 +321,25 @@ namespace Infrastructure.Persistence.Migrations
                 column: "CustomerId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Orders_ShipmentId",
-                table: "Orders",
-                column: "ShipmentId");
+                name: "IX_Routes_DriverId",
+                table: "Routes",
+                column: "DriverId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Routes_VehicleId",
+                table: "Routes",
+                column: "VehicleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RouteStops_RouteId",
                 table: "RouteStops",
                 column: "RouteId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RouteStops_ShipmentId",
+                table: "RouteStops",
+                column: "ShipmentId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ShipmentHistory_RouteStopId",
@@ -261,19 +352,10 @@ namespace Infrastructure.Persistence.Migrations
                 column: "ShipmentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Shipments_DriverId",
+                name: "IX_Shipments_OrderId",
                 table: "Shipments",
-                column: "DriverId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Shipments_RouteId",
-                table: "Shipments",
-                column: "RouteId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Shipments_VehicleId",
-                table: "Shipments",
-                column: "VehicleId");
+                column: "OrderId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
@@ -292,10 +374,13 @@ namespace Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "DeliveryAttempts");
+
+            migrationBuilder.DropTable(
                 name: "DriverVehicle");
 
             migrationBuilder.DropTable(
-                name: "Orders");
+                name: "OrderItems");
 
             migrationBuilder.DropTable(
                 name: "ShipmentHistory");
@@ -304,16 +389,19 @@ namespace Infrastructure.Persistence.Migrations
                 name: "RouteStops");
 
             migrationBuilder.DropTable(
-                name: "Shipments");
-
-            migrationBuilder.DropTable(
                 name: "Routes");
 
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "Shipments");
 
             migrationBuilder.DropTable(
                 name: "Vehicles");
+
+            migrationBuilder.DropTable(
+                name: "Orders");
+
+            migrationBuilder.DropTable(
+                name: "Users");
         }
     }
 }
