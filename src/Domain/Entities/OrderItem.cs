@@ -4,10 +4,36 @@ namespace Domain.Entities;
 
 public class OrderItem : BaseEntity
 {
-    public Guid OrderId { get; set; }
-    public Order Order { get; set; } = null!;
+    private OrderItem()
+    {
+    }
 
-    public string Name { get; set; } = string.Empty;
-    public decimal Price { get; set; }
-    public int Quantity { get; set; }
+    public Guid OrderId { get; private set; }
+    public Order Order { get; private set; } = null!;
+
+    public string Name { get; private set; } = string.Empty;
+    public decimal Price { get; private set; }
+    public int Quantity { get; private set; }
+
+    public static OrderItem Create(string name, decimal price, int quantity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (quantity <= 0)
+        {
+            throw new ArgumentException("Quantity must be greater than zero.", nameof(quantity));
+        }
+
+        if (price < 0)
+        {
+            throw new ArgumentException("Price cannot be negative.", nameof(price));
+        }
+
+        return new OrderItem
+        {
+            Name = name,
+            Price = price,
+            Quantity = quantity
+        };
+    }
 }

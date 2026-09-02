@@ -14,6 +14,7 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(v => v.Brand).HasMaxLength(100);
         builder.Property(v => v.Model).HasMaxLength(100);
         builder.Property(v => v.CapacityKg).HasColumnType("decimal(18,2)").IsRequired();
+        builder.Property(v => v.Active).IsRequired().HasDefaultValue(true);
 
         builder.HasIndex(v => v.LicensePlate).IsUnique();
     }

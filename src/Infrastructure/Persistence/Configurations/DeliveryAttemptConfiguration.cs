@@ -23,9 +23,9 @@ public class DeliveryAttemptConfiguration : IEntityTypeConfiguration<DeliveryAtt
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(a => a.Shipment)
-            .WithMany()
+            .WithMany(s => s.DeliveryAttempts)
             .HasForeignKey(a => a.ShipmentId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(a => a.RouteStop)
             .WithMany()

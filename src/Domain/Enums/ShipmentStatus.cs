@@ -3,8 +3,10 @@ namespace Domain.Enums;
 public enum ShipmentStatus
 {
     Pending,
-    Started,
+    InProgress,
     Stopped,
+    Arrived,
     Finalized,
+    DeliveryFailed,
     Cancelled
 }
