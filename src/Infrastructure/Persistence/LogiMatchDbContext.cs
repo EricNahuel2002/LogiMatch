@@ -1,17 +1,18 @@
 using Domain.Entities;
 using Infrastructure.Persistence.Interceptors;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence;
 
-public class LogiMatchDbContext : DbContext
+public class LogiMatchDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
 {
     public LogiMatchDbContext(DbContextOptions<LogiMatchDbContext> options)
         : base(options)
     {
     }
 
-    public DbSet<User> Users => Set<User>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<DeliveryAttempt> DeliveryAttempts => Set<DeliveryAttempt>();
@@ -23,6 +24,7 @@ public class LogiMatchDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(LogiMatchDbContext).Assembly);
     }
 

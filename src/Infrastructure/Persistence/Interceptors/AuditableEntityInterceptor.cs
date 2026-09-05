@@ -32,7 +32,7 @@ public sealed class AuditableEntityInterceptor : SaveChangesInterceptor
 
         var now = DateTime.UtcNow;
 
-        foreach (var entry in context.ChangeTracker.Entries<BaseEntity>())
+        foreach (var entry in context.ChangeTracker.Entries<IAuditableEntity>())
         {
             switch (entry.State)
             {
