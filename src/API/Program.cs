@@ -76,11 +76,15 @@ if (app.Environment.IsDevelopment())
             scope.ServiceProvider,
             builder.Configuration["Seed:AdminEmail"],
             builder.Configuration["Seed:AdminPassword"]);
+
+        await DemoDataSeeder.SeedAsync(
+            scope.ServiceProvider,
+            builder.Configuration["Seed:Password"]);
     }
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Error applying migrations or seeding identity data.");
+        logger.LogError(ex, "Error applying migrations or seeding data.");
     }
 }
 
