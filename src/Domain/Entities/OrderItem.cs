@@ -14,8 +14,9 @@ public class OrderItem : BaseEntity
     public string Name { get; private set; } = string.Empty;
     public decimal Price { get; private set; }
     public int Quantity { get; private set; }
+    public decimal WeightKg { get; private set; }
 
-    public static OrderItem Create(string name, decimal price, int quantity)
+    public static OrderItem Create(string name, decimal price, int quantity, decimal weightKg)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -29,11 +30,17 @@ public class OrderItem : BaseEntity
             throw new ArgumentException("Price cannot be negative.", nameof(price));
         }
 
+        if (weightKg <= 0)
+        {
+            throw new ArgumentException("Weight must be greater than zero.", nameof(weightKg));
+        }
+
         return new OrderItem
         {
             Name = name,
             Price = price,
-            Quantity = quantity
+            Quantity = quantity,
+            WeightKg = weightKg
         };
     }
 }

@@ -16,5 +16,8 @@ public class CreateOrderItemValidator : AbstractValidator<CreateOrderItemRequest
 
         RuleFor(x => x.Price)
             .GreaterThanOrEqualTo(0);
+
+        RuleFor(x => x.WeightKg)
+            .GreaterThan(0);
     }
 }

@@ -9,7 +9,7 @@ public class RouteStopTests
     public void Create_LinksShipment()
     {
         var shipment = Shipment.Create(
-            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]));
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
 
         var stop = RouteStop.Create(shipment, new Coordinate(20, 20), 2, "Cliente A");
 
@@ -23,7 +23,7 @@ public class RouteStopTests
     public void Create_WithInvalidStopOrder_Throws()
     {
         var shipment = Shipment.Create(
-            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]));
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
 
         Assert.Throws<ArgumentException>(
             () => RouteStop.Create(shipment, new Coordinate(20, 20), 0));
@@ -34,7 +34,7 @@ public class RouteStopTests
     {
         var route = Route.Create(new Coordinate(10, 10));
         var shipment = Shipment.Create(
-            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]));
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
         var stop = RouteStop.Create(shipment, new Coordinate(20, 20), 1);
 
         stop.AssignToRoute(route);

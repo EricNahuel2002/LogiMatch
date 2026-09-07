@@ -45,10 +45,21 @@ public class ValidatorsTests
     {
         var validator = new CreateOrderItemValidator();
 
-        var result = validator.Validate(new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 0 });
+        var result = validator.Validate(new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 0, WeightKg = 1m });
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.PropertyName == "Quantity");
+    }
+
+    [Fact]
+    public void CreateOrderItemValidator_WhenWeightNotPositive_Fails()
+    {
+        var validator = new CreateOrderItemValidator();
+
+        var result = validator.Validate(new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1, WeightKg = 0 });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "WeightKg");
     }
 
     [Fact]

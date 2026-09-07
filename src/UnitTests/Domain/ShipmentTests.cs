@@ -6,7 +6,7 @@ namespace UnitTests.Domain;
 
 public class ShipmentTests
 {
-    private readonly Order _order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]);
+    private readonly Order _order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]);
 
     [Fact]
     public void Create_LinksSingleOrder()

@@ -27,7 +27,7 @@ public class RouteStopServiceTests
 
     private static Shipment BuildPendingShipment()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
         return Shipment.Create(order);
     }
 

@@ -42,14 +42,14 @@ public class ShipmentServiceTests
 
     private static Shipment BuildPendingShipment()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
         return Shipment.Create(order);
     }
 
     [Fact]
     public async Task CreateAsync_CreatesShipmentForOrderAndSaves()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
         _orders.Setup(r => r.GetByIdAsync(order.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
 

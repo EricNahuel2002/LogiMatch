@@ -52,8 +52,8 @@ public class OrderServiceTests
             CreatedByAdminId = admin.Id,
             Items =
             [
-                new CreateOrderItemRequest { Name = "Item A", Price = 10m, Quantity = 2 },
-                new CreateOrderItemRequest { Name = "Item B", Price = 5m, Quantity = 1 }
+                new CreateOrderItemRequest { Name = "Item A", Price = 10m, Quantity = 2, WeightKg = 3m },
+                new CreateOrderItemRequest { Name = "Item B", Price = 5m, Quantity = 1, WeightKg = 4m }
             ]
         };
 
@@ -80,7 +80,7 @@ public class OrderServiceTests
             {
                 CustomerId = Guid.NewGuid(),
                 CreatedByAdminId = Guid.NewGuid(),
-                Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1 }]
+                Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1, WeightKg = 2m }]
             }));
     }
 
@@ -100,21 +100,21 @@ public class OrderServiceTests
             {
                 CustomerId = customer.Id,
                 CreatedByAdminId = Guid.NewGuid(),
-                Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1 }]
+                Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1, WeightKg = 2m }]
             }));
     }
 
     [Fact]
     public async Task AddItemAsync_AddsItemToOrderAndSaves()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Existing", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Existing", 1m, 1, 5m)]);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
 
         var service = CreateService();
         await service.AddItemAsync(
             order.Id,
-            new CreateOrderItemRequest { Name = "New", Price = 2m, Quantity = 3 });
+            new CreateOrderItemRequest { Name = "New", Price = 2m, Quantity = 3, WeightKg = 4m });
 
         Assert.Equal(2, order.Items.Count);
         Assert.Contains(order.Items, i => i.Name == "New" && i.Quantity == 3);
@@ -132,13 +132,13 @@ public class OrderServiceTests
         await Assert.ThrowsAsync<NotFoundException>(() =>
             service.AddItemAsync(
                 Guid.NewGuid(),
-                new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1 }));
+                new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1, WeightKg = 2m }));
     }
 
     [Fact]
     public async Task AssignDriverAsync_SetsDriverAndSaves()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
         var driver = new Driver();
         _orders.Setup(r => r.GetByIdAsync(order.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
@@ -155,7 +155,7 @@ public class OrderServiceTests
     [Fact]
     public async Task AssignDriverAsync_WhenNoDriverProvided_UnassignsWithoutLoadingDriver()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
         _orders.Setup(r => r.GetByIdAsync(order.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
 
@@ -169,7 +169,7 @@ public class OrderServiceTests
     [Fact]
     public async Task AssignDriverAsync_WhenDriverNotFound_ThrowsNotFoundException()
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1)]);
+        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
         _orders.Setup(r => r.GetByIdAsync(order.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
         _users.Setup(u => u.GetDriverByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))

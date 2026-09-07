@@ -13,6 +13,7 @@ public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
         builder.Property(i => i.Name).HasMaxLength(200).IsRequired();
         builder.Property(i => i.Price).HasColumnType("decimal(18,2)").IsRequired();
         builder.Property(i => i.Quantity).IsRequired();
+        builder.Property(i => i.WeightKg).HasColumnType("decimal(18,2)").IsRequired();
 
         builder.HasOne(i => i.Order)
             .WithMany(o => o.Items)

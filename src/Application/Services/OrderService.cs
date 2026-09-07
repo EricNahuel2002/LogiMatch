@@ -42,7 +42,7 @@ public class OrderService : IOrderService
             ?? throw new NotFoundException(nameof(Admin), request.CreatedByAdminId);
 
         var items = request.Items
-            .Select(i => OrderItem.Create(i.Name, i.Price, i.Quantity))
+            .Select(i => OrderItem.Create(i.Name, i.Price, i.Quantity, i.WeightKg))
             .ToList();
 
         var order = Order.Create(customer, admin, items);
@@ -60,7 +60,7 @@ public class OrderService : IOrderService
         var order = await _orders.GetByIdWithItemsAsync(orderId, cancellationToken)
             ?? throw new NotFoundException(nameof(Order), orderId);
 
-        order.AddItem(OrderItem.Create(request.Name, request.Price, request.Quantity));
+        order.AddItem(OrderItem.Create(request.Name, request.Price, request.Quantity, request.WeightKg));
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }

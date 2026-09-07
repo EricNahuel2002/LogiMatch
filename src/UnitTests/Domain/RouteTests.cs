@@ -37,7 +37,7 @@ public class RouteTests
     public void AddStop_AddsRouteStop()
     {
         var shipment = Shipment.Create(
-            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1)]));
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
         var stop = RouteStop.Create(shipment, new Coordinate(20, 20), 1, "Cliente A");
         stop.AssignToRoute(_route);
 
@@ -50,13 +50,13 @@ public class RouteTests
     public void AddStop_DuplicateOrder_Throws()
     {
         var stop1 = RouteStop.Create(
-            Shipment.Create(Order.Create(new Customer(), new Admin(), [OrderItem.Create("A", 10m, 1)])),
+            Shipment.Create(Order.Create(new Customer(), new Admin(), [OrderItem.Create("A", 10m, 1, 5m)])),
             new Coordinate(20, 20), 1);
         stop1.AssignToRoute(_route);
         _route.AddStop(stop1);
 
         var stop2 = RouteStop.Create(
-            Shipment.Create(Order.Create(new Customer(), new Admin(), [OrderItem.Create("B", 10m, 1)])),
+            Shipment.Create(Order.Create(new Customer(), new Admin(), [OrderItem.Create("B", 10m, 1, 5m)])),
             new Coordinate(20, 20), 1);
         stop2.AssignToRoute(_route);
 
