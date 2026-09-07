@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IShipmentService, ShipmentService>();
         services.AddScoped<IRouteService, RouteService>();
         services.AddScoped<IRouteStopService, RouteStopService>();
+        services.AddScoped<IDriverService, DriverService>();
 
         services.AddValidatorsFromAssembly(assembly);
 
