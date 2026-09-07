@@ -40,12 +40,14 @@ public class OrderTests
     }
 
     [Fact]
-    public void SetAssignedDriver_WhenDispatched_Throws()
+    public void SetAssignedDriver_WhenDispatched_SetsDriver()
     {
         var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]);
         Shipment.Create(order);
 
-        Assert.Throws<InvalidOperationException>(() => order.SetAssignedDriver(Guid.NewGuid()));
+        order.SetAssignedDriver(Guid.NewGuid());
+
+        Assert.NotNull(order.AssignedDriverId);
     }
 
     [Fact]

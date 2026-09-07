@@ -8,5 +8,7 @@ public interface IShipmentRepository
 
     Task<Shipment?> GetByIdWithDetailsAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<Shipment?> GetByIdWithAssignmentDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default);
 }

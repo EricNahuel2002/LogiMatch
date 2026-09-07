@@ -22,7 +22,7 @@ public class RouteStopConfiguration : IEntityTypeConfiguration<RouteStop>
         });
 
         builder.HasOne(rs => rs.Shipment)
-            .WithOne()
+            .WithOne(s => s.RouteStop)
             .HasForeignKey<RouteStop>(rs => rs.ShipmentId)
             .OnDelete(DeleteBehavior.Cascade);
     }

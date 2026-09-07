@@ -11,10 +11,14 @@ namespace Api.Controllers;
 public sealed class ShipmentsController : ControllerBase
 {
     private readonly IShipmentService _shipmentService;
+    private readonly IShipmentAssignmentService _shipmentAssignmentService;
 
-    public ShipmentsController(IShipmentService shipmentService)
+    public ShipmentsController(
+        IShipmentService shipmentService,
+        IShipmentAssignmentService shipmentAssignmentService)
     {
         _shipmentService = shipmentService;
+        _shipmentAssignmentService = shipmentAssignmentService;
     }
 
     [HttpPost]
@@ -81,5 +85,14 @@ public sealed class ShipmentsController : ControllerBase
         await _shipmentService.RegisterDeliveryAttemptAsync(shipmentId, request, cancellationToken);
 
         return NoContent();
+    }
+
+    [HttpPost("{shipmentId:guid}/driver-suggestion")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<IActionResult> SuggestDriver(Guid shipmentId, CancellationToken cancellationToken)
+    {
+        var suggestion = await _shipmentAssignmentService.SuggestDriverAsync(shipmentId, cancellationToken);
+
+        return Ok(suggestion);
     }
 }

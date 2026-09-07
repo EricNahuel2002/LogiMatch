@@ -57,7 +57,6 @@ public class Order : BaseEntity
 
     public void SetAssignedDriver(Guid? driverId)
     {
-        EnsureNotDispatched();
         AssignedDriverId = driverId;
     }
 

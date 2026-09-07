@@ -17,6 +17,8 @@ public class Shipment : BaseEntity
     public Guid OrderId { get; private set; }
     public Order Order { get; private set; } = null!;
 
+    public RouteStop? RouteStop { get; private set; }
+
     public bool ArrivedAtDestination { get; private set; }
 
     public ICollection<DeliveryAttempt> DeliveryAttempts { get; private set; } = [];

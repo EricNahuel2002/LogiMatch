@@ -26,6 +26,15 @@ public class ShipmentRepository : IShipmentRepository
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
 
+    public Task<Shipment?> GetByIdWithAssignmentDetailsAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return _db.Shipments
+            .Include(s => s.Order)
+                .ThenInclude(o => o.Items)
+            .Include(s => s.RouteStop)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
     public async Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default)
     {
         await _db.Shipments.AddAsync(shipment, cancellationToken);
