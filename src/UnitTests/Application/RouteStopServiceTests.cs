@@ -1,8 +1,10 @@
 using Application.Dtos.RouteStops;
 using Application.Exceptions;
+using Application.Integrations;
 using Application.Persistence;
 using Application.Services;
 using Domain.Entities;
+using Domain.ValueObjects;
 using FluentValidation;
 using Moq;
 
@@ -13,6 +15,7 @@ public class RouteStopServiceTests
     private readonly Mock<IRouteStopRepository> _routeStops = new();
     private readonly Mock<IShipmentRepository> _shipments = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
+    private readonly Mock<IGeocodingClient> _geocoding = new();
     private readonly Mock<IValidator<CreateRouteStopRequest>> _createRouteStopValidator =
         FluentValidationMocks.AlwaysValid<CreateRouteStopRequest>();
 
@@ -22,6 +25,7 @@ public class RouteStopServiceTests
             _routeStops.Object,
             _shipments.Object,
             _unitOfWork.Object,
+            _geocoding.Object,
             _createRouteStopValidator.Object);
     }
 
@@ -32,11 +36,13 @@ public class RouteStopServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_CreatesRouteStopForShipmentAndSaves()
+    public async Task CreateAsync_GeocodesAddressAndCreatesRouteStopForShipment()
     {
         var shipment = BuildPendingShipment();
         _shipments.Setup(r => r.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(shipment);
+        _geocoding.Setup(g => g.GeocodeAsync("Av. Rivadavia 123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Coordinate(1m, 2m));
 
         RouteStop? created = null;
         _routeStops.Setup(r => r.AddAsync(It.IsAny<RouteStop>(), It.IsAny<CancellationToken>()))
@@ -47,8 +53,7 @@ public class RouteStopServiceTests
         var id = await service.CreateAsync(new CreateRouteStopRequest
         {
             ShipmentId = shipment.Id,
-            Latitude = 1m,
-            Longitude = 2m,
+            Address = "Av. Rivadavia 123",
             StopOrder = 3,
             Name = "Client A"
         });
@@ -57,6 +62,7 @@ public class RouteStopServiceTests
         Assert.Equal(shipment.Id, created.ShipmentId);
         Assert.Equal(3, created.StopOrder);
         Assert.Equal("Client A", created.Name);
+        Assert.Equal(new Coordinate(1m, 2m), created.Coordinate);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -72,8 +78,7 @@ public class RouteStopServiceTests
             service.CreateAsync(new CreateRouteStopRequest
             {
                 ShipmentId = Guid.NewGuid(),
-                Latitude = 1m,
-                Longitude = 2m,
+                Address = "Av. Rivadavia 123",
                 StopOrder = 1
             }));
     }

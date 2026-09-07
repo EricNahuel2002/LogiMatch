@@ -101,13 +101,28 @@ public class ValidatorsTests
         var result = validator.Validate(new CreateRouteStopRequest
         {
             ShipmentId = Guid.NewGuid(),
-            Latitude = 1m,
-            Longitude = 2m,
+            Address = "Av. Rivadavia 123",
             StopOrder = 0
         });
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.PropertyName == "StopOrder");
+    }
+
+    [Fact]
+    public void CreateRouteStopValidator_WhenAddressEmpty_Fails()
+    {
+        var validator = new CreateRouteStopValidator();
+
+        var result = validator.Validate(new CreateRouteStopRequest
+        {
+            ShipmentId = Guid.NewGuid(),
+            Address = string.Empty,
+            StopOrder = 1
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Address");
     }
 
     [Fact]
