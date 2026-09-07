@@ -9,7 +9,7 @@ public class LogiMatchDbContextFactory : IDesignTimeDbContextFactory<LogiMatchDb
     {
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Server=localhost;Database=LogiMatchDB;Trusted_Connection=True;TrustServerCertificate=True";
+            ?? "Server=localhost\\SQLEXPRESS;Database=LogiMatchDB;Trusted_Connection=True;TrustServerCertificate=True";
 
         var options = new DbContextOptionsBuilder<LogiMatchDbContext>()
             .UseSqlServer(connectionString)
