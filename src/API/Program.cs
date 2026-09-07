@@ -53,7 +53,49 @@ builder.Services
     .AddPolicy(Policies.DriverOnly, policy => policy.RequireRole("Driver"));
 
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        var securityScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        {
+            Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Pegá el token del POST /api/auth/login"
+        };
+
+        document.Components ??= new Microsoft.OpenApi.Models.OpenApiComponents();
+        document.Components.SecuritySchemes["Bearer"] = securityScheme;
+
+        document.SecurityRequirements =
+        [
+            new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+            {
+                [new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                    {
+                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                }] = []
+            }
+        ];
+
+        return Task.CompletedTask;
+    });
+    options.AddOperationTransformer((operation, context, _) =>
+    {
+        if (context.Description.ActionDescriptor.EndpointMetadata
+            .Any(m => m is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute))
+        {
+            operation.Security = [];
+        }
+
+        return Task.CompletedTask;
+    });
+});
 builder.Services.AddHealthChecks();
 
 builder.Services.AddApplication();
