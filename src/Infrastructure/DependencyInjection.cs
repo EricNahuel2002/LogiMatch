@@ -30,7 +30,7 @@ public static class DependencyInjection
                 configuration["OpenRouteService:BaseUrl"] ?? "https://api.heigit.org/openrouteservice/");
         });
 
-        services.AddHttpClient<IRouteDistanceClient, OpenRouteServiceMatrixClient>((sp, client) =>
+        services.AddHttpClient<IRouteClient, OpenRouteServiceMatrixClient>((sp, client) =>
         {
             var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
             client.BaseAddress = new Uri(

@@ -7,7 +7,7 @@ public class DriverScoringTests
     [Fact]
     public void Rank_WithSingleCandidate_UsesNeutralNormalization()
     {
-        var input = new DriverScoringInput(Guid.NewGuid(), 1, 0, 0, 1000, 500m);
+        var input = new DriverScoringInput(Guid.NewGuid(), 1, 0, 0, 1000, 30, 500m);
 
         var ranked = DriverScoring.Rank([input]);
 
@@ -21,8 +21,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_CloserDriver_WinsWhenOtherMetricsAreEqual()
     {
-        var driverA = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 2000, 100m);
-        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 500, 100m);
+        var driverA = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 2000, 30, 100m);
+        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 500, 10, 100m);
 
         var ranked = DriverScoring.Rank([driverA, driverB]);
 
@@ -32,8 +32,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_MoreSuccessfulAttempts_WinsWhenDistanceIsEqual()
     {
-        var driverA = new DriverScoringInput(Guid.NewGuid(), 5, 0, 0, 1000, 100m);
-        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 100m);
+        var driverA = new DriverScoringInput(Guid.NewGuid(), 5, 0, 0, 1000, 30, 100m);
+        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
 
         var ranked = DriverScoring.Rank([driverA, driverB]);
 
@@ -43,8 +43,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_BusierDriver_LosesWhenOtherMetricsAreEqual()
     {
-        var freeDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 100m);
-        var busyDriver = new DriverScoringInput(Guid.NewGuid(), 0, 2, 1, 1000, 100m);
+        var freeDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
+        var busyDriver = new DriverScoringInput(Guid.NewGuid(), 0, 2, 1, 1000, 30, 100m);
 
         var ranked = DriverScoring.Rank([freeDriver, busyDriver]);
 
@@ -65,11 +65,22 @@ public class DriverScoringTests
         var idLow = Guid.NewGuid();
         var idHigh = Guid.NewGuid();
 
-        var tied = new DriverScoringInput(idHigh, 0, 0, 0, 500, 100m);
-        var near = new DriverScoringInput(idLow, 0, 0, 0, 400, 100m);
+        var tied = new DriverScoringInput(idHigh, 0, 0, 0, 500, 10, 100m);
+        var near = new DriverScoringInput(idLow, 0, 0, 0, 400, 10, 100m);
 
         var ranked = DriverScoring.Rank([tied, near]);
 
         Assert.Equal(near.DriverId, ranked[0].DriverId);
+    }
+
+    [Fact]
+    public void Rank_FasterDriver_WinsWhenOtherMetricsAreEqual()
+    {
+        var slowDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
+        var fastDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 10, 100m);
+
+        var ranked = DriverScoring.Rank([slowDriver, fastDriver]);
+
+        Assert.Equal(fastDriver.DriverId, ranked[0].DriverId);
     }
 }

@@ -7,6 +7,7 @@ public sealed record DriverRankingItem(
     int PendingShipmentCount,
     int InProgressShipmentCount,
     int DistanceMeters,
+    int DurationMinutes,
     decimal FreeCapacityKg);
 
 public sealed record DriverAssignmentSuggestion(

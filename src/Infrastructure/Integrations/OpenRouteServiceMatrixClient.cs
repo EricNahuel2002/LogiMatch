@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Integrations;
 
-public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
+public sealed class OpenRouteServiceMatrixClient : IRouteClient
 {
     private const int MaxOriginsPerRequest = 69;
     private const string MatrixPath = "v2/matrix/driving-car";
@@ -28,8 +28,8 @@ public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
         _logger = logger;
     }
 
-    public async Task<IReadOnlyDictionary<Guid, int>> GetDrivingDistancesAsync(
-        IReadOnlyCollection<RouteDistanceOrigin> origins,
+    public async Task<IReadOnlyDictionary<Guid, RouteMetrics>> GetDrivingMetricsAsync(
+        IReadOnlyCollection<RouteOrigin> origins,
         Coordinate destination,
         CancellationToken cancellationToken = default)
     {
@@ -38,10 +38,10 @@ public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
             _logger.LogError("OpenRouteService API key is not configured.");
-            throw new InvalidOperationException("Route distance service is unavailable.");
+            throw new InvalidOperationException("Route metrics service is unavailable.");
         }
 
-        var result = new Dictionary<Guid, int>();
+        var result = new Dictionary<Guid, RouteMetrics>();
 
         foreach (var chunk in origins.Chunk(MaxOriginsPerRequest))
         {
@@ -58,7 +58,7 @@ public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
                 Locations = locations,
                 Sources = Enumerable.Range(0, chunk.Length).ToArray(),
                 Destinations = [chunk.Length],
-                Metrics = ["distance"],
+                Metrics = ["distance", "duration"],
                 Units = "m"
             };
 
@@ -74,7 +74,7 @@ public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
                     "OpenRouteService matrix failed ({StatusCode}): {Body}",
                     response.StatusCode,
                     errorBody);
-                throw new InvalidOperationException("Route distance service is unavailable.");
+                throw new InvalidOperationException("Route metrics service is unavailable.");
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -89,12 +89,21 @@ public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
 
             for (var i = 0; i < chunk.Length; i++)
             {
-                var row = matrix.Distances[i];
-                var distance = row is { Length: > 0 } ? row[0] : null;
+                var distanceRow = matrix.Distances[i];
+                var distance = distanceRow is { Length: > 0 } ? distanceRow[0] : null;
 
-                if (distance is { } meters)
+                var durationRow = matrix.Durations is null || matrix.Durations.Length <= i
+                    ? null
+                    : matrix.Durations[i];
+                var duration = durationRow is { Length: > 0 } ? durationRow[0] : null;
+
+                if (distance is { } meters && duration is { } seconds)
                 {
-                    result.TryAdd(chunk[i].DriverId, (int)Math.Round(meters));
+                    result.TryAdd(
+                        chunk[i].DriverId,
+                        new RouteMetrics(
+                            (int)Math.Round(meters),
+                            (int)Math.Ceiling(seconds / 60.0)));
                 }
             }
         }
@@ -115,5 +124,8 @@ public sealed class OpenRouteServiceMatrixClient : IRouteDistanceClient
     {
         [JsonPropertyName("distances")]
         public double?[][]? Distances { get; set; }
+
+        [JsonPropertyName("durations")]
+        public double?[][]? Durations { get; set; }
     }
 }

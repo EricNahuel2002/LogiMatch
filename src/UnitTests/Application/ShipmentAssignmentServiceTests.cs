@@ -12,11 +12,11 @@ public class ShipmentAssignmentServiceTests
 {
     private readonly Mock<IShipmentRepository> _shipments = new();
     private readonly Mock<IUserRepository> _users = new();
-    private readonly Mock<IRouteDistanceClient> _routeDistance = new();
+    private readonly Mock<IRouteClient> _routeClient = new();
 
     private ShipmentAssignmentService CreateService()
     {
-        return new ShipmentAssignmentService(_shipments.Object, _users.Object, _routeDistance.Object);
+        return new ShipmentAssignmentService(_shipments.Object, _users.Object, _routeClient.Object);
     }
 
     private static Shipment BuildPendingShipmentWithStop(decimal weightKg = 10m)
@@ -48,15 +48,15 @@ public class ShipmentAssignmentServiceTests
             inProgressWeightKg);
     }
 
-    private void SetupDistances(params (Guid DriverId, int Meters)[] distances)
+    private void SetupDrivingMetrics(params (Guid DriverId, int Meters, int Minutes)[] metrics)
     {
-        _ = _routeDistance.Setup(r => r.GetDrivingDistancesAsync(
-            It.IsAny<IReadOnlyCollection<RouteDistanceOrigin>>(),
+        _ = _routeClient.Setup(r => r.GetDrivingMetricsAsync(
+            It.IsAny<IReadOnlyCollection<RouteOrigin>>(),
             It.IsAny<Coordinate>(),
             It.IsAny<CancellationToken>()))
-        .ReturnsAsync(distances.ToDictionary(
-            d => d.DriverId,
-            d => d.Meters));
+        .ReturnsAsync(metrics.ToDictionary(
+            m => m.DriverId,
+            m => new RouteMetrics(m.Meters, m.Minutes)));
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class ShipmentAssignmentServiceTests
         _users.Setup(u => u.GetDriverCandidatesAsync(
             It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Candidate(driverA, 100m), Candidate(driverB, 100m)]);
-        SetupDistances((driverA, 5000), (driverB, 1000));
+        SetupDrivingMetrics((driverA, 5000, 30), (driverB, 1000, 10));
 
         var service = CreateService();
         var suggestion = await service.SuggestDriverAsync(shipment.Id);
@@ -151,7 +151,7 @@ public class ShipmentAssignmentServiceTests
         _users.Setup(u => u.GetDriverCandidatesAsync(
             It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Candidate(smallCapacity, 5m), Candidate(enoughCapacity, 100m)]);
-        SetupDistances((smallCapacity, 100), (enoughCapacity, 200));
+        SetupDrivingMetrics((smallCapacity, 100, 5), (enoughCapacity, 200, 10));
 
         var service = CreateService();
         var suggestion = await service.SuggestDriverAsync(shipment.Id);
@@ -177,7 +177,7 @@ public class ShipmentAssignmentServiceTests
                 Candidate(heavyDriver, 100m, inProgressWeightKg: 60m),
                 Candidate(freeDriver, 100m)
             ]);
-        SetupDistances((heavyDriver, 100), (freeDriver, 100));
+        SetupDrivingMetrics((heavyDriver, 100, 5), (freeDriver, 100, 5));
 
         var service = CreateService();
         var suggestion = await service.SuggestDriverAsync(shipment.Id);

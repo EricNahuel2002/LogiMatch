@@ -16,16 +16,16 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
 
     private readonly IShipmentRepository _shipments;
     private readonly IUserRepository _users;
-    private readonly IRouteDistanceClient _routeDistance;
+    private readonly IRouteClient _routeClient;
 
     public ShipmentAssignmentService(
         IShipmentRepository shipments,
         IUserRepository users,
-        IRouteDistanceClient routeDistance)
+        IRouteClient routeClient)
     {
         _shipments = shipments;
         _users = users;
-        _routeDistance = routeDistance;
+        _routeClient = routeClient;
     }
 
     public async Task<DriverAssignmentSuggestion> SuggestDriverAsync(
@@ -79,6 +79,7 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                     candidate.PendingShipmentCount,
                     candidate.InProgressShipmentCount,
                     0,
+                    0,
                     freeCapacityKg)));
         }
 
@@ -88,18 +89,22 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
         }
 
         var origins = eligible
-            .Select(e => new RouteDistanceOrigin(e.DriverId, e.Location))
+            .Select(e => new RouteOrigin(e.DriverId, e.Location))
             .ToList();
 
-        var distances = await _routeDistance.GetDrivingDistancesAsync(
+        var metrics = await _routeClient.GetDrivingMetricsAsync(
             origins, shipment.RouteStop.Coordinate, cancellationToken);
 
         var inputs = new List<DriverScoringInput>();
         foreach (var (driverId, _, input) in eligible)
         {
-            if (distances.TryGetValue(driverId, out var distanceMeters))
+            if (metrics.TryGetValue(driverId, out var routeMetrics))
             {
-                inputs.Add(input with { DistanceMeters = distanceMeters });
+                inputs.Add(input with
+                {
+                    DistanceMeters = routeMetrics.DistanceMeters,
+                    DurationMinutes = routeMetrics.DurationMinutes
+                });
             }
         }
 
@@ -119,6 +124,7 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                 result.Input.PendingShipmentCount,
                 result.Input.InProgressShipmentCount,
                 result.Input.DistanceMeters,
+                result.Input.DurationMinutes,
                 result.Input.FreeCapacityKg))
             .ToList();
 
