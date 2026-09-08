@@ -7,11 +7,17 @@ LogiMatch es una plataforma empresarial de logística que recibe pedidos de clie
 ## Tecnologias y arquitectura
 
 - .NET 9.0
-- ASP.NET Core
+- ASP.NET Core Web API
+- C#
 - Entity Framework Core
 - SQL Server
 - Clean Architecture
-- Buenas prácticas
+- Git
+- GitHub
+- GitHub Actions
+- FluentValidation
+- Scalar
+- xUnit
 - CI/CD
 - Testing
 
@@ -36,24 +42,12 @@ Para decisiones importantes, explicar brevemente el porqué. No extender la expl
 ## Contexto antes de modificar
 
 1. Leer únicamente la documentación relevante de `docs/`.
-2. Inspeccionar primero los archivos directamente relacionados con la tarea.
-3. No recorrer todo el repositorio salvo que la tarea realmente requiera una visión global.
-4. Reutilizar patrones y servicios existentes antes de crear nuevos.
-5. No modificar archivos no relacionados con la tarea.
-6. Si falta información para tomar una decisión importante, preguntar antes de cambiar la arquitectura.
-
-## Stack
-
-- ASP.NET Core Web API
-- C#
-- Entity Framework Core
-- SQL Server
-- Git
-- GitHub
-- GitHub Actions
-- FluentValidation
-- Scalar
-- xUnit
+2. Leer context.md para ubicar qué capa o entidad resuelve la tarea antes de inspeccionar el repositorio.
+3. Inspeccionar primero los archivos directamente relacionados con la tarea.
+4. No recorrer todo el repositorio salvo que la tarea realmente requiera una visión global.
+5. Reutilizar patrones y servicios existentes antes de crear nuevos.
+6. No modificar archivos no relacionados con la tarea.
+7. Si falta información para tomar una decisión importante, preguntar antes de cambiar la arquitectura.
 
 ## Respuestas
 
