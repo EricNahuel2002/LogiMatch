@@ -41,6 +41,75 @@ public class ValidatorsTests
     }
 
     [Fact]
+    public void CreateOrderValidator_WhenOnlyWindowStartProvided_Fails()
+    {
+        var validator = new CreateOrderValidator();
+
+        var result = validator.Validate(new CreateOrderRequest
+        {
+            CustomerId = Guid.NewGuid(),
+            CreatedByAdminId = Guid.NewGuid(),
+            Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1 }],
+            DeliveryWindowStartAt = new DateTime(2026, 9, 9, 9, 0, 0)
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "DeliveryWindowEndAt");
+    }
+
+    [Fact]
+    public void CreateOrderValidator_WhenOnlyWindowEndProvided_Fails()
+    {
+        var validator = new CreateOrderValidator();
+
+        var result = validator.Validate(new CreateOrderRequest
+        {
+            CustomerId = Guid.NewGuid(),
+            CreatedByAdminId = Guid.NewGuid(),
+            Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1 }],
+            DeliveryWindowEndAt = new DateTime(2026, 9, 9, 10, 0, 0)
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "DeliveryWindowStartAt");
+    }
+
+    [Fact]
+    public void CreateOrderValidator_WhenWindowEndBeforeStart_Fails()
+    {
+        var validator = new CreateOrderValidator();
+
+        var result = validator.Validate(new CreateOrderRequest
+        {
+            CustomerId = Guid.NewGuid(),
+            CreatedByAdminId = Guid.NewGuid(),
+            Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1 }],
+            DeliveryWindowStartAt = new DateTime(2026, 9, 9, 10, 0, 0),
+            DeliveryWindowEndAt = new DateTime(2026, 9, 9, 9, 0, 0)
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "DeliveryWindowEndAt");
+    }
+
+    [Fact]
+    public void CreateOrderValidator_WhenValidWindow_Passes()
+    {
+        var validator = new CreateOrderValidator();
+
+        var result = validator.Validate(new CreateOrderRequest
+        {
+            CustomerId = Guid.NewGuid(),
+            CreatedByAdminId = Guid.NewGuid(),
+            Items = [new CreateOrderItemRequest { Name = "Item", Price = 1m, Quantity = 1, WeightKg = 1m }],
+            DeliveryWindowStartAt = new DateTime(2026, 9, 9, 9, 0, 0),
+            DeliveryWindowEndAt = new DateTime(2026, 9, 9, 10, 0, 0)
+        });
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
     public void CreateOrderItemValidator_WhenQuantityNotPositive_Fails()
     {
         var validator = new CreateOrderItemValidator();

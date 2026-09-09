@@ -14,7 +14,9 @@ lanzan `InvalidOperationException` (→ 409 en la API).
   `Name`/`Surname`/`CreatedAt`/`UpdatedAt` son propios.
 - **`Entities/Driver.cs`** — chofer; `CurrentLocation: Coordinate?` con `SetCurrentLocation(Coordinate)`.
 - **`Entities/Order.cs`** — agregado raíz de órdenes. Invariantes: exige ≥1 item, no se modifica
-  tras asignarse a un envío. `AddItem`, `SetAssignedDriver`, `AssignToShipment` (internal).
+  tras asignarse a un envío. Ventana horaria de entrega opcional (`DeliveryWindowStartAt`/`EndAt`,
+  hora local Argentina); si viene un extremo falta el otro o `end <= start` → excepción.
+  `AddItem`, `SetAssignedDriver`, `AssignToShipment` (internal).
 - **`Entities/Shipment.cs`** — **máquina de estados del envío**: `Start/Stop/Resume/
   MarkArrivedAtDestination/Cancel/RegisterDeliveryAttempt` validan cada transición; máx. 3 intentos
   (≥5 min entre intentos) y la llegada a destino deciden `Finalized`/`DeliveryFailed`. Cada
@@ -31,7 +33,9 @@ lanzan `InvalidOperationException` (→ 409 en la API).
 - **`Entities/Vehicle.cs`** — vehículo con capacidad y estado activo (`SetActive`).
 - **`Services/DriverScoring.cs`** — regla pura (sin I/O) que rankea candidatos: normaliza 6 métricas
   (intentos exitosos del día, envíos pendientes, en progreso, distancia, tiempo de llegada y capacidad
-  libre) con pesos y las combina en un score 0..1 para sugerir el mejor conductor.
+  libre) con pesos y las combina en un score 0..1 para sugerir el mejor conductor. Además provee el
+  filtro previo de **factibilidad** `IsFeasible`/`FilterFeasible` (llegada `now + duración` dentro de
+  la ventana de entrega, inclusiva), independiente del scoring.
 - **`Enums/ShipmentStatus.cs`** — estados: Pending, InProgress, Stopped, Arrived, Finalized,
   DeliveryFailed, Cancelled.
 - **`ValueObjects/Coordinate.cs`** — record `(Latitude, Longitude)`.
@@ -55,7 +59,9 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
     `CurrentLocation`.
   - `ShipmentAssignmentService` — `SuggestDriverAsync`: envío `Pending` con `RouteStop`, peso de la
     orden vs capacidad libre de cada candidato, distancia y duración por carretera
-    (`IRouteClient.GetDrivingMetricsAsync`) y ranking final con `Domain.Services.DriverScoring`.
+    (`IRouteClient.GetDrivingMetricsAsync`), **filtro de factibilidad** por ventana horaria de la
+    orden (hora actual en Argentina vs llegada estimada) y ranking final con
+    `Domain.Services.DriverScoring`.
   - Interfaces `I*Service` junto a cada implementación.
 - **`Persistence/`** — contratos (interfaces) de repositorios y `IUnitOfWork`;
   las implementaciones EF están en Infrastructure. `IUserRepository` agrega `GetDriverByIdAsync` y
@@ -68,7 +74,8 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
 - **`Dtos/`** — modelos de request por agregado (`Orders`, `Shipments`, `Routes`, `RouteStops`,
   `Drivers`, `Auth`); payload esperado por cada endpoint. `Shipments.DriverAssignmentSuggestion`
   modela la sugerencia (driver recomendado + ranking); `RouteStops.CreateRouteStopRequest` recibe
-  `Address` (se geocodifica) y `Orders.CreateOrderItemRequest` incluye `WeightKg`.
+  `Address` (se geocodifica) y `Orders.CreateOrderItemRequest` incluye `WeightKg`;
+  `Orders.CreateOrderRequest` acepta `DeliveryWindowStartAt`/`EndAt` opcionales (hora local).
 - **`Validators/`** — FluentValidation `XxxRequestValidator` por request; los servicios llaman
   `ValidateAndThrowAsync` (no son decorativos). `Common/NoteValidation.cs` centraliza notas.
 - **`Exceptions/NotFoundException.cs`** — entidad no encontrada (→ 404 en la API).
@@ -118,8 +125,9 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
 - **`Persistence/DemoDataSeeder.cs`** — seed demo idempotente (solo Development): admin, customer y
   5 conductores con ubicación y vehículos; crea la orden objetivo sin driver asignado y otros envíos
   con estados variados (pendientes, en progreso, entregado) para ejercitar el scoring.
-- **`Migrations/`** — migraciones EF del esquema: `InitialCreate` y `AddDriverScoring`
-  (ubicación de conductores + `WeightKg` en items).
+- **`Migrations/`** — migraciones EF del esquema: `InitialCreate`, `AddDriverScoring`
+  (ubicación de conductores + `WeightKg` en items) y `AddOrderDeliveryWindow`
+  (ventana horaria de entrega en órdenes).
 - **Tests** — `src/UnitTests/Domain/` (reglas por entidad, incl. `DriverScoringTests`,
   `OrderItemTests`, `DriverTests`), `src/UnitTests/Application/` (servicios con Moq y validators,
   incl. `ShipmentAssignmentServiceTests`, `DriverServiceTests`, `RouteStopServiceTests`),

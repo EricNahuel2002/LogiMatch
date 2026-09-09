@@ -108,12 +108,20 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
             }
         }
 
-        if (inputs.Count == 0)
+        IReadOnlyList<DriverScoringInput> feasible = inputs;
+        if (shipment.Order.DeliveryWindowStartAt is { } windowStart
+            && shipment.Order.DeliveryWindowEndAt is { } windowEnd)
         {
-            throw new InvalidOperationException("No eligible drivers available for the shipment.");
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ArgentinaTimeZone);
+            feasible = DriverScoring.FilterFeasible(inputs, nowLocal, windowStart, windowEnd);
         }
 
-        var ranked = DriverScoring.Rank(inputs);
+        if (feasible.Count == 0)
+        {
+            throw new InvalidOperationException("No feasible drivers available for the shipment.");
+        }
+
+        var ranked = DriverScoring.Rank(feasible);
         var recommendedDriverId = ranked[0].DriverId;
 
         var ranking = ranked

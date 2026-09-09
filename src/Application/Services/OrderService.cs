@@ -45,7 +45,12 @@ public class OrderService : IOrderService
             .Select(i => OrderItem.Create(i.Name, i.Price, i.Quantity, i.WeightKg))
             .ToList();
 
-        var order = Order.Create(customer, admin, items);
+        var order = Order.Create(
+            customer,
+            admin,
+            items,
+            request.DeliveryWindowStartAt,
+            request.DeliveryWindowEndAt);
 
         await _orders.AddAsync(order, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

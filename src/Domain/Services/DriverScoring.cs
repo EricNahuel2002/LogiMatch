@@ -71,6 +71,25 @@ public static class DriverScoring
             .ToList();
     }
 
+    public static IReadOnlyList<DriverScoringInput> FilterFeasible(
+        IReadOnlyList<DriverScoringInput> candidates,
+        DateTime now,
+        DateTime windowStartAt,
+        DateTime windowEndAt)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        return candidates
+            .Where(c => IsFeasible(c.DurationMinutes, now, windowStartAt, windowEndAt))
+            .ToList();
+    }
+
+    public static bool IsFeasible(int travelMinutes, DateTime now, DateTime windowStartAt, DateTime windowEndAt)
+    {
+        var arrivalAt = now.AddMinutes(travelMinutes);
+        return arrivalAt >= windowStartAt && arrivalAt <= windowEndAt;
+    }
+
     private static decimal NormalizeHigher(decimal value, decimal min, decimal max)
     {
         return max == min ? 0.5m : (value - min) / (max - min);

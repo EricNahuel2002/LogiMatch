@@ -19,9 +19,17 @@ public class ShipmentAssignmentServiceTests
         return new ShipmentAssignmentService(_shipments.Object, _users.Object, _routeClient.Object);
     }
 
-    private static Shipment BuildPendingShipmentWithStop(decimal weightKg = 10m)
+    private static Shipment BuildPendingShipmentWithStop(
+        decimal weightKg = 10m,
+        DateTime? windowStart = null,
+        DateTime? windowEnd = null)
     {
-        var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, weightKg)]);
+        var order = Order.Create(
+            new Customer(),
+            new Admin(),
+            [OrderItem.Create("Item", 10m, 1, weightKg)],
+            windowStart,
+            windowEnd);
         var shipment = Shipment.Create(order);
         var stop = RouteStop.Create(shipment, new Coordinate(-34.6m, -58.4m), 1);
 
@@ -57,6 +65,12 @@ public class ShipmentAssignmentServiceTests
         .ReturnsAsync(metrics.ToDictionary(
             m => m.DriverId,
             m => new RouteMetrics(m.Meters, m.Minutes)));
+    }
+
+    private static DateTime GetArgentinaNow()
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Argentina/Buenos_Aires");
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
     }
 
     [Fact]
@@ -184,5 +198,50 @@ public class ShipmentAssignmentServiceTests
 
         Assert.Single(suggestion.Ranking);
         Assert.Equal(freeDriver, suggestion.Ranking[0].DriverId);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_WhenArrivalOutsideWindow_Throws()
+    {
+        var nowLocal = GetArgentinaNow();
+        var shipment = BuildPendingShipmentWithStop(10m, nowLocal.AddMinutes(-60), nowLocal.AddMinutes(-10));
+        var driverA = Guid.NewGuid();
+        var driverB = Guid.NewGuid();
+
+        _shipments.Setup(r => r.GetByIdWithAssignmentDetailsAsync(
+            shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+        _users.Setup(u => u.GetDriverCandidatesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Candidate(driverA, 100m), Candidate(driverB, 100m)]);
+        SetupDrivingMetrics((driverA, 5000, 30), (driverB, 1000, 5));
+
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SuggestDriverAsync(shipment.Id));
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_WhenArrivalWithinWindow_SuggestsClosestDriver()
+    {
+        var nowLocal = GetArgentinaNow();
+        var shipment = BuildPendingShipmentWithStop(10m, nowLocal.AddMinutes(-60), nowLocal.AddHours(12));
+        var driverA = Guid.NewGuid();
+        var driverB = Guid.NewGuid();
+
+        _shipments.Setup(r => r.GetByIdWithAssignmentDetailsAsync(
+            shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+        _users.Setup(u => u.GetDriverCandidatesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Candidate(driverA, 100m), Candidate(driverB, 100m)]);
+        SetupDrivingMetrics((driverA, 5000, 60), (driverB, 1000, 10));
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(driverB, suggestion.RecommendedDriverId);
+        Assert.Equal(2, suggestion.Ranking.Count);
+        Assert.Equal(driverB, suggestion.Ranking[0].DriverId);
     }
 }

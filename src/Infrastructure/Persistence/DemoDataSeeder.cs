@@ -12,6 +12,9 @@ public static class DemoDataSeeder
 
     private const string TargetShipmentItemName = "Caja de repuestos";
 
+    private static readonly TimeZoneInfo ArgentinaTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("America/Argentina/Buenos_Aires");
+
     private static readonly Coordinate DepotOrigin = new(-34.6082m, -58.3784m);
 
     private static readonly string[] CustomerEmails = ["cliente@logimatch.com"];
@@ -170,10 +173,13 @@ public static class DemoDataSeeder
             var shipments = new List<Shipment>();
             var routes = new List<Route>();
 
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ArgentinaTimeZone);
+
             var (targetShipment, _, targetRoute) = BuildShipment(
                 customer, admin, null,
                 TargetShipmentItemName, 250m, 1, 300m,
-                "Av. Rivadavia 123", new Coordinate(-34.6083m, -58.3816m));
+                "Av. Rivadavia 123", new Coordinate(-34.6083m, -58.3816m),
+                nowLocal, nowLocal.AddHours(6));
             shipments.Add(targetShipment);
             routes.Add(targetRoute);
 
@@ -260,9 +266,16 @@ public static class DemoDataSeeder
         int quantity,
         decimal weightKg,
         string stopName,
-        Coordinate stopCoordinate)
+        Coordinate stopCoordinate,
+        DateTime? deliveryWindowStartAt = null,
+        DateTime? deliveryWindowEndAt = null)
     {
-        var order = Order.Create(customer, admin, [OrderItem.Create(itemName, price, quantity, weightKg)]);
+        var order = Order.Create(
+            customer,
+            admin,
+            [OrderItem.Create(itemName, price, quantity, weightKg)],
+            deliveryWindowStartAt,
+            deliveryWindowEndAt);
 
         if (assignedDriver is not null)
         {

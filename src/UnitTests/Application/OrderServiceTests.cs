@@ -68,6 +68,39 @@ public class OrderServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WithDeliveryWindow_SetsWindowOnOrder()
+    {
+        var customer = new Customer();
+        var admin = new Admin();
+        var windowStart = new DateTime(2026, 9, 9, 9, 0, 0);
+        var windowEnd = windowStart.AddHours(2);
+        _users.Setup(u => u.GetCustomerByIdAsync(customer.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(customer);
+        _users.Setup(u => u.GetAdminByIdAsync(admin.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(admin);
+
+        Order? created = null;
+        _orders.Setup(r => r.AddAsync(It.IsAny<Order>(), It.IsAny<CancellationToken>()))
+            .Callback<Order, CancellationToken>((order, _) => created = order)
+            .Returns(Task.CompletedTask);
+
+        var request = new CreateOrderRequest
+        {
+            CustomerId = customer.Id,
+            CreatedByAdminId = admin.Id,
+            DeliveryWindowStartAt = windowStart,
+            DeliveryWindowEndAt = windowEnd,
+            Items = [new CreateOrderItemRequest { Name = "Item A", Price = 10m, Quantity = 1, WeightKg = 3m }]
+        };
+
+        var service = CreateService();
+        await service.CreateAsync(request);
+
+        Assert.Equal(windowStart, created!.DeliveryWindowStartAt);
+        Assert.Equal(windowEnd, created.DeliveryWindowEndAt);
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenCustomerNotFound_ThrowsNotFoundException()
     {
         _users.Setup(u => u.GetCustomerByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))

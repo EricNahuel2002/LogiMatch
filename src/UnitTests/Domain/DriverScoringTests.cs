@@ -83,4 +83,66 @@ public class DriverScoringTests
 
         Assert.Equal(fastDriver.DriverId, ranked[0].DriverId);
     }
+
+    [Fact]
+    public void FilterFeasible_WhenArrivalWithinWindow_KeepsCandidate()
+    {
+        var now = new DateTime(2026, 9, 9, 9, 0, 0);
+        var windowStart = now.AddMinutes(15);
+        var windowEnd = now.AddMinutes(60);
+        var onTime = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
+
+        var feasible = DriverScoring.FilterFeasible([onTime], now, windowStart, windowEnd);
+
+        Assert.Equal(onTime.DriverId, Assert.Single(feasible).DriverId);
+    }
+
+    [Fact]
+    public void FilterFeasible_WhenArrivalBeforeWindowStart_ExcludesCandidate()
+    {
+        var now = new DateTime(2026, 9, 9, 9, 0, 0);
+        var windowStart = now.AddMinutes(30);
+        var windowEnd = now.AddMinutes(60);
+        var early = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m);
+
+        var feasible = DriverScoring.FilterFeasible([early], now, windowStart, windowEnd);
+
+        Assert.Empty(feasible);
+    }
+
+    [Fact]
+    public void FilterFeasible_WhenArrivalAfterWindowEnd_ExcludesCandidate()
+    {
+        var now = new DateTime(2026, 9, 9, 9, 0, 0);
+        var windowStart = now.AddMinutes(-60);
+        var windowEnd = now.AddMinutes(-30);
+        var late = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m);
+
+        var feasible = DriverScoring.FilterFeasible([late], now, windowStart, windowEnd);
+
+        Assert.Empty(feasible);
+    }
+
+    [Fact]
+    public void FilterFeasible_ArrivalOnWindowBoundaries_KeepsCandidate()
+    {
+        var now = new DateTime(2026, 9, 9, 9, 0, 0);
+        var windowStart = now.AddMinutes(15);
+        var windowEnd = now.AddMinutes(30);
+        var onTime = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m);
+
+        var feasible = DriverScoring.FilterFeasible([onTime], now, windowStart, windowEnd);
+
+        Assert.Equal(onTime.DriverId, Assert.Single(feasible).DriverId);
+    }
+
+    [Fact]
+    public void FilterFeasible_WithNoCandidates_ReturnsEmpty()
+    {
+        var now = new DateTime(2026, 9, 9, 9, 0, 0);
+
+        var feasible = DriverScoring.FilterFeasible([], now, now, now.AddHours(1));
+
+        Assert.Empty(feasible);
+    }
 }

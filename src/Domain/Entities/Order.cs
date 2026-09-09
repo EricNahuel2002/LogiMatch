@@ -20,10 +20,18 @@ public class Order : BaseEntity
     public Guid? ShipmentId { get; private set; }
     public Shipment? Shipment { get; private set; }
 
+    public DateTime? DeliveryWindowStartAt { get; private set; }
+    public DateTime? DeliveryWindowEndAt { get; private set; }
+
     public ICollection<OrderItem> Items { get; private set; } = [];
     public ICollection<DeliveryAttempt> DeliveryAttempts { get; private set; } = [];
 
-    public static Order Create(Customer customer, Admin createdBy, IEnumerable<OrderItem> items)
+    public static Order Create(
+        Customer customer,
+        Admin createdBy,
+        IEnumerable<OrderItem> items,
+        DateTime? deliveryWindowStartAt = null,
+        DateTime? deliveryWindowEndAt = null)
     {
         ArgumentNullException.ThrowIfNull(customer);
         ArgumentNullException.ThrowIfNull(createdBy);
@@ -32,7 +40,9 @@ public class Order : BaseEntity
         var order = new Order
         {
             Customer = customer,
-            CreatedBy = createdBy
+            CreatedBy = createdBy,
+            DeliveryWindowStartAt = deliveryWindowStartAt,
+            DeliveryWindowEndAt = deliveryWindowEndAt
         };
 
         foreach (var item in items)
@@ -44,6 +54,8 @@ public class Order : BaseEntity
         {
             throw new InvalidOperationException("An order requires at least one item.");
         }
+
+        order.EnsureValidDeliveryWindow();
 
         return order;
     }
@@ -78,6 +90,21 @@ public class Order : BaseEntity
         if (ShipmentId.HasValue)
         {
             throw new InvalidOperationException("An order cannot be modified after being assigned to a shipment.");
+        }
+    }
+
+    private void EnsureValidDeliveryWindow()
+    {
+        if (DeliveryWindowStartAt.HasValue != DeliveryWindowEndAt.HasValue)
+        {
+            throw new InvalidOperationException("A delivery window requires both start and end.");
+        }
+
+        if (DeliveryWindowStartAt is { } start
+            && DeliveryWindowEndAt is { } end
+            && end <= start)
+        {
+            throw new InvalidOperationException("The delivery window end must be after the start.");
         }
     }
 }
