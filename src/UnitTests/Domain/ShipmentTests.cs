@@ -125,4 +125,74 @@ public class ShipmentTests
 
         Assert.Equal(ShipmentStatus.Cancelled, shipment.Status);
     }
+
+    [Fact]
+    public void Requeue_SetsPendingAndClearsDriver()
+    {
+        var shipment = Shipment.Create(_order);
+        _order.SetAssignedDriver(Guid.NewGuid());
+        shipment.Start();
+
+        shipment.Requeue(RouteCancellationReason.VehicleBreakdown);
+
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
+        Assert.Null(_order.AssignedDriverId);
+        Assert.Contains(
+            shipment.History,
+            h => h.Status == ShipmentStatus.Pending && h.Note == RouteCancellationReason.VehicleBreakdown.ToString());
+    }
+
+    [Fact]
+    public void Requeue_WithNote_RecordsCombinedNote()
+    {
+        var shipment = Shipment.Create(_order);
+
+        shipment.Requeue(RouteCancellationReason.RouteAbandonment, "Driver did not show up");
+
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
+        Assert.Contains(
+            shipment.History,
+            h => h.Note == "RouteAbandonment - Driver did not show up");
+    }
+
+    [Fact]
+    public void Requeue_WhenFinalized_Throws()
+    {
+        var shipment = Shipment.Create(_order);
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+        shipment.RegisterDeliveryAttempt(null, true);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            shipment.Requeue(RouteCancellationReason.Emergency));
+        Assert.Equal(ShipmentStatus.Finalized, shipment.Status);
+    }
+
+    [Fact]
+    public void Requeue_WhenDeliveryFailed_Throws()
+    {
+        var shipment = Shipment.Create(_order);
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        for (var i = 0; i < Shipment.MaxDeliveryAttempts; i++)
+        {
+            shipment.RegisterDeliveryAttempt(null, false, attemptedAt: baseTime.AddMinutes(10 * i));
+        }
+
+        Assert.Equal(ShipmentStatus.DeliveryFailed, shipment.Status);
+        Assert.Throws<InvalidOperationException>(() =>
+            shipment.Requeue(RouteCancellationReason.Accident));
+    }
+
+    [Fact]
+    public void Requeue_WhenCancelled_Throws()
+    {
+        var shipment = Shipment.Create(_order);
+        shipment.Cancel();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            shipment.Requeue(RouteCancellationReason.InclementWeather));
+        Assert.Equal(ShipmentStatus.Cancelled, shipment.Status);
+    }
 }

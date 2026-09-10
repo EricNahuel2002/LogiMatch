@@ -97,6 +97,25 @@ public class Shipment : BaseEntity
         AddHistory(ShipmentStatus.Cancelled, null, note);
     }
 
+    public void Requeue(RouteCancellationReason reason, string? note = null)
+    {
+        if (Status is ShipmentStatus.Finalized
+            or ShipmentStatus.DeliveryFailed
+            or ShipmentStatus.Cancelled)
+        {
+            throw new InvalidOperationException(
+                $"A completed or cancelled shipment cannot be reprogrammed. Current status: {Status}.");
+        }
+
+        Status = ShipmentStatus.Pending;
+        Order.SetAssignedDriver(null);
+
+        var historyNote = string.IsNullOrWhiteSpace(note)
+            ? reason.ToString()
+            : $"{reason} - {note}";
+        AddHistory(ShipmentStatus.Pending, null, historyNote);
+    }
+
     public void RegisterDeliveryAttempt(
         RouteStop? routeStop,
         bool succeeded,

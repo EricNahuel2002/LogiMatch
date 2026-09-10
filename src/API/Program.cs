@@ -142,3 +142,7 @@ app.MapHealthChecks("/health");
 app.MapGet("/", () => "LogiMatch API");
 
 app.Run();
+
+public partial class Program
+{
+}

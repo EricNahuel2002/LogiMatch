@@ -22,4 +22,9 @@ public class RouteStopRepository : IRouteStopRepository
     {
         await _db.RouteStops.AddAsync(routeStop, cancellationToken);
     }
+
+    public void Remove(RouteStop routeStop)
+    {
+        _db.RouteStops.Remove(routeStop);
+    }
 }

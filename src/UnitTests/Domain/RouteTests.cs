@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Enums;
 using Domain.ValueObjects;
 
 namespace UnitTests.Domain;
@@ -61,5 +62,23 @@ public class RouteTests
         stop2.AssignToRoute(_route);
 
         Assert.Throws<InvalidOperationException>(() => _route.AddStop(stop2));
+    }
+
+    [Fact]
+    public void Deactivate_SetsInactiveWithReason()
+    {
+        _route.Deactivate(RouteCancellationReason.VehicleBreakdown);
+
+        Assert.False(_route.IsActive);
+        Assert.Equal(RouteCancellationReason.VehicleBreakdown, _route.CancellationReason);
+    }
+
+    [Fact]
+    public void Deactivate_WhenAlreadyInactive_Throws()
+    {
+        _route.Deactivate(RouteCancellationReason.Emergency);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            _route.Deactivate(RouteCancellationReason.Accident));
     }
 }

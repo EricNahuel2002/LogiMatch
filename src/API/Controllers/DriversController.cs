@@ -24,14 +24,34 @@ public sealed class DriversController : ControllerBase
         UpdateDriverLocationRequest request,
         CancellationToken cancellationToken)
     {
-        var driverIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(driverIdClaim, out var driverId))
+        var driverId = GetDriverId();
+        if (driverId is not { } id)
         {
             return Unauthorized();
         }
 
-        await _driverService.UpdateLocationAsync(driverId, request, cancellationToken);
+        await _driverService.UpdateLocationAsync(id, request, cancellationToken);
 
         return NoContent();
+    }
+
+    [HttpPost("me/routes/cancel")]
+    public async Task<IActionResult> CancelMyRoute(CancelRouteRequest request, CancellationToken cancellationToken)
+    {
+        var driverId = GetDriverId();
+        if (driverId is not { } id)
+        {
+            return Unauthorized();
+        }
+
+        await _driverService.CancelCurrentRouteAsync(id, request, cancellationToken);
+
+        return NoContent();
+    }
+
+    private Guid? GetDriverId()
+    {
+        var driverIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(driverIdClaim, out var driverId) ? driverId : null;
     }
 }

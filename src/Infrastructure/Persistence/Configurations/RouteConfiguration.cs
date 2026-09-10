@@ -16,6 +16,13 @@ public class RouteConfiguration : IEntityTypeConfiguration<Route>
             o.Property(c => c.Longitude).HasColumnType("decimal(9,6)");
         });
 
+        builder.Property(r => r.CancellationReason)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        builder.Property(r => r.IsActive)
+            .IsRequired();
+
         builder.HasOne(r => r.Driver)
             .WithMany()
             .HasForeignKey(r => r.DriverId)

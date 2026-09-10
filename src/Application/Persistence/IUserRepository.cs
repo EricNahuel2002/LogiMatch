@@ -10,6 +10,8 @@ public interface IUserRepository
 
     Task<Driver?> GetDriverByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Admin>> GetAdminsAsync(CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<DriverAssignmentCandidate>> GetDriverCandidatesAsync(
         DateTime dayStartUtc,
         DateTime dayEndUtc,

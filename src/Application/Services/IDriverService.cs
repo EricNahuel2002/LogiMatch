@@ -8,4 +8,9 @@ public interface IDriverService
         Guid driverId,
         UpdateDriverLocationRequest request,
         CancellationToken cancellationToken = default);
+
+    Task CancelCurrentRouteAsync(
+        Guid driverId,
+        CancelRouteRequest request,
+        CancellationToken cancellationToken = default);
 }

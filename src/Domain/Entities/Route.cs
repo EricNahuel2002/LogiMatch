@@ -1,4 +1,5 @@
 using Domain.Common;
+using Domain.Enums;
 using Domain.ValueObjects;
 
 namespace Domain.Entities;
@@ -10,6 +11,10 @@ public class Route : BaseEntity
     }
 
     public Coordinate Origin { get; private set; } = new(0, 0);
+
+    public bool IsActive { get; private set; } = true;
+
+    public RouteCancellationReason? CancellationReason { get; private set; }
 
     public Guid? DriverId { get; private set; }
     public Driver? Driver { get; private set; }
@@ -51,5 +56,16 @@ public class Route : BaseEntity
         }
 
         RouteStops.Add(routeStop);
+    }
+
+    public void Deactivate(RouteCancellationReason reason)
+    {
+        if (!IsActive)
+        {
+            throw new InvalidOperationException("The route is already inactive.");
+        }
+
+        IsActive = false;
+        CancellationReason = reason;
     }
 }

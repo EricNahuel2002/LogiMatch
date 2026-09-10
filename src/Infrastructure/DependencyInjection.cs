@@ -1,9 +1,11 @@
 using Application.Integrations;
 using Application.Persistence;
+using Infrastructure.Email;
 using Infrastructure.Integrations;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Infrastructure;
@@ -23,16 +25,21 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IVehicleRepository, VehicleRepository>();
 
+        services.AddOptions<EmailOptions>()
+            .Configure<IConfiguration>((options, configuration) =>
+                configuration.GetSection("Email").Bind(options));
+        services.AddScoped<IEmailSender, MailKitEmailSender>();
+
         services.AddHttpClient<IGeocodingClient, OpenRouteServiceGeocodingClient>((sp, client) =>
         {
-            var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var configuration = sp.GetRequiredService<IConfiguration>();
             client.BaseAddress = new Uri(
                 configuration["OpenRouteService:BaseUrl"] ?? "https://api.heigit.org/openrouteservice/");
         });
 
         services.AddHttpClient<IRouteClient, OpenRouteServiceMatrixClient>((sp, client) =>
         {
-            var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var configuration = sp.GetRequiredService<IConfiguration>();
             client.BaseAddress = new Uri(
                 configuration["OpenRouteService:BaseUrl"] ?? "https://api.heigit.org/openrouteservice/");
         });
