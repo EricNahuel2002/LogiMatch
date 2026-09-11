@@ -22,14 +22,6 @@ Infrastructure implementa las abstracciones necesarias para interactuar con recu
 - La API no debe convertirse en el lugar donde vive la lógica de negocio.
 - Antes de introducir una nueva capa, patrón o abstracción, evaluar si aporta un beneficio real.
 
-## Regla para agentes
-
-Antes de modificar arquitectura:
-1. Identificar qué capas están involucradas.
-2. Revisar los patrones existentes.
-3. Explicar el impacto.
-4. Pedir confirmación si el cambio es arquitectónicamente importante.
-
 ## Organización
 
 La estructura física puede evolucionar a medida que crezcan los módulos. Preferir una organización por responsabilidad o módulo cuando el tamaño del proyecto lo justifique.
