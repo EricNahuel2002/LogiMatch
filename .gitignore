@@ -3,3 +3,6 @@ task.md
 
 # Artefactos de cobertura de tests
 TestResults/
+
+# Contexto de código para agentes (no versionar)
+docs/context.md
