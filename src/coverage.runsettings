@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>
+            <Module>[Domain]*</Module>
+            <Module>[Application]*</Module>
+            <Module>[Infrastructure]*</Module>
+            <Module>[API]*</Module>
+          </Include>
+          <Exclude>
+            <Module>[UnitTests]*</Module>
+            <Module>[IntegrationTests]*</Module>
+          </Exclude>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -24,40 +24,48 @@ public class LogiMatchDbContext : IdentityDbContext<User, IdentityRole<Guid>, Gu
 
     public override int SaveChanges()
     {
-        NormalizeNewHistoryEntries();
+        NormalizeNewlyAddedEntities();
         return base.SaveChanges();
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        NormalizeNewHistoryEntries();
+        NormalizeNewlyAddedEntities();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        NormalizeNewHistoryEntries();
+        NormalizeNewlyAddedEntities();
         return base.SaveChangesAsync(cancellationToken);
     }
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
-        NormalizeNewHistoryEntries();
+        NormalizeNewlyAddedEntities();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
-    private void NormalizeNewHistoryEntries()
+    private void NormalizeNewlyAddedEntities()
     {
-        // ShipmentHistory is immutable after creation. EF Core flags a ShipmentHistory
-        // added through the Shipment.History navigation as Modified instead of Added,
+        // EF Core flags an entity added through a navigation as Modified instead of Added,
         // because its snapshot is taken before relationship fixup fills the foreign key.
-        // A row loaded from the database never has CLR-default original values, so any
-        // Modified entry whose original snapshot still contains defaults was created in
-        // this context and must be inserted.
+        // This affects immutable children added to a persisted aggregate (ShipmentHistory,
+        // OrderItem, DeliveryAttempt). A row loaded from the database never has CLR-default
+        // original values, so any Modified entry whose original snapshot still contains
+        // defaults was created in this context and must be inserted.
         ChangeTracker.DetectChanges();
-        foreach (var entry in ChangeTracker.Entries<ShipmentHistory>())
+        foreach (var entry in ChangeTracker.Entries())
         {
             if (entry.State != EntityState.Modified)
+            {
+                continue;
+            }
+
+            var entityType = entry.Entity.GetType();
+            if (entityType != typeof(ShipmentHistory)
+                && entityType != typeof(OrderItem)
+                && entityType != typeof(DeliveryAttempt))
             {
                 continue;
             }

@@ -7,12 +7,11 @@ public class LogiMatchDbContextFactory : IDesignTimeDbContextFactory<LogiMatchDb
 {
     public LogiMatchDbContext CreateDbContext(string[] args)
     {
-        var connectionString =
-            Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Server=localhost\\SQLEXPRESS;Database=LogiMatchDB;Trusted_Connection=True;TrustServerCertificate=True";
+        var configured = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+            ?? "Server=localhost\\SQLEXPRESS;Trusted_Connection=True;TrustServerCertificate=True;Database=LogiMatchDB";
 
         var options = new DbContextOptionsBuilder<LogiMatchDbContext>()
-            .UseSqlServer(connectionString)
+            .UseSqlServer(configured)
             .Options;
 
         return new LogiMatchDbContext(options);

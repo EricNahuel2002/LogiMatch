@@ -1,2 +1,5 @@
 # Registro de tareas local (no versionar)
 task.md
+
+# Artefactos de cobertura de tests
+TestResults/

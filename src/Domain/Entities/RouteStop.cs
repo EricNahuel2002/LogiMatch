@@ -9,8 +9,8 @@ public class RouteStop : BaseEntity
     {
     }
 
-    public Guid RouteId { get; private set; }
-    public Route Route { get; private set; } = null!;
+    public Guid? RouteId { get; private set; }
+    public Route? Route { get; private set; }
 
     public Guid ShipmentId { get; private set; }
     public Shipment Shipment { get; private set; } = null!;

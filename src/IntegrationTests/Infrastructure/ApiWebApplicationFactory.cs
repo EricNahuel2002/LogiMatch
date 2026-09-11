@@ -7,6 +7,7 @@ using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,11 +22,29 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
     private const string TestSecret = "IntegrationTestSecretKey-0123456789abcdef!";
 
     public RecordingEmailSender EmailRecorder { get; } = new();
+    public RecordingGeocodingClient Geocoding { get; } = new();
+    public RecordingRouteClient RouteMetrics { get; } = new();
 
     public string DatabaseName { get; } = $"LogiMatchDB_IntTests_{Guid.NewGuid():N}";
 
-    private string ConnectionString =>
-        $"Server=localhost\\SQLEXPRESS;Database={DatabaseName};Trusted_Connection=True;TrustServerCertificate=True";
+    private string ConnectionString
+    {
+        get
+        {
+            const string localFallback =
+                "Server=localhost\\SQLEXPRESS;Trusted_Connection=True;TrustServerCertificate=True";
+
+            var configured = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+                ?? localFallback;
+
+            var builder = new SqlConnectionStringBuilder(configured)
+            {
+                InitialCatalog = DatabaseName
+            };
+
+            return builder.ConnectionString;
+        }
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -37,6 +56,8 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IEmailSender>(EmailRecorder);
+            services.AddSingleton<IGeocodingClient>(Geocoding);
+            services.AddSingleton<IRouteClient>(RouteMetrics);
         });
     }
 
