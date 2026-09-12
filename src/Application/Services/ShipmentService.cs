@@ -2,6 +2,7 @@ using Application.Dtos.Shipments;
 using Application.Exceptions;
 using Application.Persistence;
 using Domain.Entities;
+using Domain.Enums;
 using FluentValidation;
 
 namespace Application.Services;
@@ -12,6 +13,7 @@ public class ShipmentService : IShipmentService
     private readonly IOrderRepository _orders;
     private readonly IRouteStopRepository _routeStops;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IShipmentPriorityAssignmentService _priorityAssignment;
     private readonly IValidator<StopShipmentRequest> _stopValidator;
     private readonly IValidator<ResumeShipmentRequest> _resumeValidator;
     private readonly IValidator<MarkArrivedRequest> _markArrivedValidator;
@@ -23,6 +25,7 @@ public class ShipmentService : IShipmentService
         IOrderRepository orders,
         IRouteStopRepository routeStops,
         IUnitOfWork unitOfWork,
+        IShipmentPriorityAssignmentService priorityAssignment,
         IValidator<StopShipmentRequest> stopValidator,
         IValidator<ResumeShipmentRequest> resumeValidator,
         IValidator<MarkArrivedRequest> markArrivedValidator,
@@ -33,6 +36,7 @@ public class ShipmentService : IShipmentService
         _orders = orders;
         _routeStops = routeStops;
         _unitOfWork = unitOfWork;
+        _priorityAssignment = priorityAssignment;
         _stopValidator = stopValidator;
         _resumeValidator = resumeValidator;
         _markArrivedValidator = markArrivedValidator;
@@ -49,6 +53,8 @@ public class ShipmentService : IShipmentService
 
         await _shipments.AddAsync(shipment, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _priorityAssignment.RecalculatePrioritiesAsync(cancellationToken);
 
         return shipment.Id;
     }
@@ -120,9 +126,28 @@ public class ShipmentService : IShipmentService
 
         var routeStop = await GetRouteStopOrDefaultAsync(request.RouteStopId, cancellationToken);
 
-        shipment.RegisterDeliveryAttempt(routeStop, request.Succeeded, request.Note, request.AttemptedAt);
+        shipment.RegisterDeliveryAttempt(routeStop, request.Succeeded, request.FailureReason, request.Note, request.AttemptedAt);
+
+        var registeredAbsent = !request.Succeeded
+            && request.FailureReason == DeliveryFailureReason.CustomerAbsent
+            && shipment.DeliveryAttempts.Count(
+                a => a.FailureReason == DeliveryFailureReason.CustomerAbsent) == 1;
+
+        if (request.Succeeded)
+        {
+            shipment.Order.Customer.RegisterSuccessfulDelivery();
+        }
+        else if (registeredAbsent)
+        {
+            shipment.Order.Customer.RegisterAbsentDelivery();
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (registeredAbsent)
+        {
+            await _priorityAssignment.RecalculatePrioritiesAsync(cancellationToken);
+        }
     }
 
     private async Task<Shipment> GetShipmentAsync(Guid shipmentId, CancellationToken cancellationToken)

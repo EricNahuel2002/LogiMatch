@@ -10,5 +10,8 @@ public interface IShipmentRepository
 
     Task<Shipment?> GetByIdWithAssignmentDetailsAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<PendingShipmentPriorityData>> GetPendingForPriorityAsync(
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default);
 }

@@ -3,6 +3,7 @@ using Application.Integrations;
 using Application.Persistence;
 using Application.Services;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.ValueObjects;
 using Moq;
 
@@ -150,6 +151,120 @@ public class ShipmentAssignmentServiceTests
         Assert.Equal(driverB, suggestion.RecommendedDriverId);
         Assert.Equal(2, suggestion.Ranking.Count);
         Assert.Equal(driverB, suggestion.Ranking[0].DriverId);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_UrgentShipment_PicksBestDriver()
+    {
+        var shipment = BuildPendingShipmentWithStop();
+        shipment.SetPriority(ShipmentPriority.Urgent);
+        var (drivers, _) = AddFiveDrivers(shipment);
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(drivers[0], suggestion.RecommendedDriverId);
+        Assert.Equal(ShipmentPriority.Urgent, suggestion.Priority);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_HighPriorityShipment_PicksFirstQuartileDriver()
+    {
+        var shipment = BuildPendingShipmentWithStop();
+        shipment.SetPriority(ShipmentPriority.High);
+        var (drivers, _) = AddFiveDrivers(shipment);
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(drivers[1], suggestion.RecommendedDriverId);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_NormalPriorityShipment_PicksMedianDriver()
+    {
+        var shipment = BuildPendingShipmentWithStop();
+        shipment.SetPriority(ShipmentPriority.Normal);
+        var (drivers, _) = AddFiveDrivers(shipment);
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(drivers[2], suggestion.RecommendedDriverId);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_LowPriorityShipment_PicksWorstDriver()
+    {
+        var shipment = BuildPendingShipmentWithStop();
+        shipment.SetPriority(ShipmentPriority.Low);
+        var (drivers, _) = AddFiveDrivers(shipment);
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(drivers[^1], suggestion.RecommendedDriverId);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_WhenSingleFeasibleDriver_AlwaysPicksIt()
+    {
+        var shipment = BuildPendingShipmentWithStop();
+        shipment.SetPriority(ShipmentPriority.Low);
+        var driver = Guid.NewGuid();
+
+        _shipments.Setup(r => r.GetByIdWithAssignmentDetailsAsync(
+            shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+        _users.Setup(u => u.GetDriverCandidatesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Candidate(driver, 100m)]);
+        SetupDrivingMetrics((driver, 1000, 10));
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(driver, suggestion.RecommendedDriverId);
+    }
+
+    private (Guid[] Drivers, decimal[] Capacities) AddFiveDrivers(Shipment shipment)
+    {
+        var (drivers, capacities) = BuildFiveDrivers();
+        SetupShipmentWithDrivers(shipment, drivers, capacities);
+        SetupFiveDrivingMetrics(drivers);
+        return (drivers, capacities);
+    }
+
+    private static (Guid[] Drivers, decimal[] Capacities) BuildFiveDrivers()
+    {
+        return (
+            [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()],
+            [100m, 100m, 100m, 100m, 100m]);
+    }
+
+    private void SetupShipmentWithDrivers(
+        Shipment shipment,
+        IReadOnlyList<Guid> drivers,
+        IReadOnlyList<decimal> capacities)
+    {
+        _shipments.Setup(r => r.GetByIdWithAssignmentDetailsAsync(
+            shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+        _users.Setup(u => u.GetDriverCandidatesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(drivers
+                .Select((driverId, index) => Candidate(driverId, capacities[index]))
+                .ToList());
+    }
+
+    private void SetupFiveDrivingMetrics(IReadOnlyList<Guid> drivers)
+    {
+        SetupDrivingMetrics(
+            (drivers[0], 1000, 10),
+            (drivers[1], 2000, 20),
+            (drivers[2], 3000, 30),
+            (drivers[3], 4000, 40),
+            (drivers[4], 5000, 50));
     }
 
     [Fact]

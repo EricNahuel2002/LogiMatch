@@ -15,6 +15,7 @@ public class ShipmentServiceTests
     private readonly Mock<IOrderRepository> _orders = new();
     private readonly Mock<IRouteStopRepository> _routeStops = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
+    private readonly Mock<IShipmentPriorityAssignmentService> _priorityAssignment = new();
     private readonly Mock<IValidator<StopShipmentRequest>> _stopValidator =
         FluentValidationMocks.AlwaysValid<StopShipmentRequest>();
     private readonly Mock<IValidator<ResumeShipmentRequest>> _resumeValidator =
@@ -33,6 +34,7 @@ public class ShipmentServiceTests
             _orders.Object,
             _routeStops.Object,
             _unitOfWork.Object,
+            _priorityAssignment.Object,
             _stopValidator.Object,
             _resumeValidator.Object,
             _markArrivedValidator.Object,
@@ -184,10 +186,92 @@ public class ShipmentServiceTests
         var service = CreateService();
         await service.RegisterDeliveryAttemptAsync(
             shipment.Id,
-            new RegisterDeliveryAttemptRequest { Succeeded = false, Note = "No one home" });
+            new RegisterDeliveryAttemptRequest
+            {
+                Succeeded = false,
+                FailureReason = DeliveryFailureReason.CustomerAbsent,
+                Note = "No one home"
+            });
 
         Assert.Equal(ShipmentStatus.Arrived, shipment.Status);
         Assert.Single(shipment.DeliveryAttempts);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterDeliveryAttemptAsync_WhenCustomerAbsent_RegistersAbsentDeliveryOnce()
+    {
+        var shipment = BuildPendingShipment();
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+        _shipments.Setup(r => r.GetByIdWithDetailsAsync(shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+
+        var service = CreateService();
+        var baseTime = DateTime.UtcNow;
+
+        await service.RegisterDeliveryAttemptAsync(
+            shipment.Id,
+            new RegisterDeliveryAttemptRequest
+            {
+                Succeeded = false,
+                FailureReason = DeliveryFailureReason.CustomerAbsent,
+                AttemptedAt = baseTime
+            });
+        await service.RegisterDeliveryAttemptAsync(
+            shipment.Id,
+            new RegisterDeliveryAttemptRequest
+            {
+                Succeeded = false,
+                FailureReason = DeliveryFailureReason.CustomerAbsent,
+                AttemptedAt = baseTime.AddMinutes(10)
+            });
+
+        Assert.Equal(1, shipment.Order.Customer.AbsentDeliveriesCount);
+        _priorityAssignment.Verify(
+            p => p.RecalculatePrioritiesAsync(It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterDeliveryAttemptAsync_WhenRefused_DoesNotRegisterAbsentDelivery()
+    {
+        var shipment = BuildPendingShipment();
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+        _shipments.Setup(r => r.GetByIdWithDetailsAsync(shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+
+        var service = CreateService();
+        await service.RegisterDeliveryAttemptAsync(
+            shipment.Id,
+            new RegisterDeliveryAttemptRequest
+            {
+                Succeeded = false,
+                FailureReason = DeliveryFailureReason.Refused,
+                Note = "Client refused package"
+            });
+
+        Assert.Equal(0, shipment.Order.Customer.AbsentDeliveriesCount);
+        _priorityAssignment.Verify(
+            p => p.RecalculatePrioritiesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterDeliveryAttemptAsync_WhenSucceeded_RegistersSuccessfulDelivery()
+    {
+        var shipment = BuildPendingShipment();
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+        _shipments.Setup(r => r.GetByIdWithDetailsAsync(shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+
+        var service = CreateService();
+        await service.RegisterDeliveryAttemptAsync(
+            shipment.Id,
+            new RegisterDeliveryAttemptRequest { Succeeded = true });
+
+        Assert.Equal(1, shipment.Order.Customer.SucceededDeliveriesCount);
     }
 }

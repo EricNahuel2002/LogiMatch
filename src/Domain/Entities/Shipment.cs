@@ -14,6 +14,8 @@ public class Shipment : BaseEntity
 
     public ShipmentStatus Status { get; private set; } = ShipmentStatus.Pending;
 
+    public ShipmentPriority Priority { get; private set; } = ShipmentPriority.Normal;
+
     public Guid OrderId { get; private set; }
     public Order Order { get; private set; } = null!;
 
@@ -32,6 +34,11 @@ public class Shipment : BaseEntity
         shipment.OrderId = order.Id;
         shipment.Order = order;
         return shipment;
+    }
+
+    public void SetPriority(ShipmentPriority priority)
+    {
+        Priority = priority;
     }
 
     public void Start()
@@ -119,6 +126,7 @@ public class Shipment : BaseEntity
     public void RegisterDeliveryAttempt(
         RouteStop? routeStop,
         bool succeeded,
+        DeliveryFailureReason? failureReason = null,
         string? note = null,
         DateTime? attemptedAt = null)
     {
@@ -133,6 +141,11 @@ public class Shipment : BaseEntity
             throw new InvalidOperationException($"A shipment can have at most {MaxDeliveryAttempts} delivery attempts.");
         }
 
+        if (!succeeded && failureReason is null)
+        {
+            throw new InvalidOperationException("A failed delivery attempt requires a failure reason.");
+        }
+
         var timestamp = attemptedAt ?? DateTime.UtcNow;
         var lastAttempt = DeliveryAttempts.MaxBy(a => a.AttemptedAt);
         if (lastAttempt is not null && timestamp - lastAttempt.AttemptedAt < MinTimeBetweenAttempts)
@@ -145,7 +158,7 @@ public class Shipment : BaseEntity
             ? 1
             : DeliveryAttempts.Max(a => a.AttemptNumber) + 1;
 
-        var attempt = DeliveryAttempt.Create(Order, this, routeStop, attemptNumber, timestamp, succeeded, note);
+        var attempt = DeliveryAttempt.Create(Order, this, routeStop, attemptNumber, timestamp, succeeded, failureReason, note);
         DeliveryAttempts.Add(attempt);
         Order.DeliveryAttempts.Add(attempt);
 

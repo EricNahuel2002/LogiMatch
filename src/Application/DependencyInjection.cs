@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IShipmentService, ShipmentService>();
         services.AddScoped<IShipmentAssignmentService, ShipmentAssignmentService>();
+        services.AddScoped<IShipmentPriorityAssignmentService, ShipmentPriorityAssignmentService>();
         services.AddScoped<IRouteService, RouteService>();
         services.AddScoped<IRouteStopService, RouteStopService>();
         services.AddScoped<IDriverService, DriverService>();

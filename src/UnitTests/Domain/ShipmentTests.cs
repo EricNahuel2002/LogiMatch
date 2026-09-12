@@ -177,12 +177,51 @@ public class ShipmentTests
         var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         for (var i = 0; i < Shipment.MaxDeliveryAttempts; i++)
         {
-            shipment.RegisterDeliveryAttempt(null, false, attemptedAt: baseTime.AddMinutes(10 * i));
+            shipment.RegisterDeliveryAttempt(
+                null,
+                false,
+                DeliveryFailureReason.CustomerAbsent,
+                attemptedAt: baseTime.AddMinutes(10 * i));
         }
 
         Assert.Equal(ShipmentStatus.DeliveryFailed, shipment.Status);
         Assert.Throws<InvalidOperationException>(() =>
             shipment.Requeue(RouteCancellationReason.Accident));
+    }
+
+    [Fact]
+    public void SetPriority_SetsPriority()
+    {
+        var shipment = Shipment.Create(_order);
+
+        shipment.SetPriority(ShipmentPriority.Urgent);
+
+        Assert.Equal(ShipmentPriority.Urgent, shipment.Priority);
+    }
+
+    [Fact]
+    public void RegisterDeliveryAttempt_WhenFailedWithoutReason_Throws()
+    {
+        var shipment = Shipment.Create(_order);
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            shipment.RegisterDeliveryAttempt(null, false));
+    }
+
+    [Fact]
+    public void RegisterDeliveryAttempt_WhenFailedWithReason_RecordsFailureReason()
+    {
+        var shipment = Shipment.Create(_order);
+        shipment.Start();
+        shipment.MarkArrivedAtDestination();
+
+        shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.CustomerAbsent);
+
+        var attempt = Assert.Single(shipment.DeliveryAttempts);
+        Assert.False(attempt.Succeeded);
+        Assert.Equal(DeliveryFailureReason.CustomerAbsent, attempt.FailureReason);
     }
 
     [Fact]

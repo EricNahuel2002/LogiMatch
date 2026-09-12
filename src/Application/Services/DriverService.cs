@@ -16,6 +16,7 @@ public class DriverService : IDriverService
     private readonly IRouteStopRepository _routeStops;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEmailSender _emailSender;
+    private readonly IShipmentPriorityAssignmentService _priorityAssignment;
     private readonly IValidator<UpdateDriverLocationRequest> _updateLocationValidator;
     private readonly IValidator<CancelRouteRequest> _cancelRouteValidator;
 
@@ -25,6 +26,7 @@ public class DriverService : IDriverService
         IRouteStopRepository routeStops,
         IUnitOfWork unitOfWork,
         IEmailSender emailSender,
+        IShipmentPriorityAssignmentService priorityAssignment,
         IValidator<UpdateDriverLocationRequest> updateLocationValidator,
         IValidator<CancelRouteRequest> cancelRouteValidator)
     {
@@ -33,6 +35,7 @@ public class DriverService : IDriverService
         _routeStops = routeStops;
         _unitOfWork = unitOfWork;
         _emailSender = emailSender;
+        _priorityAssignment = priorityAssignment;
         _updateLocationValidator = updateLocationValidator;
         _cancelRouteValidator = cancelRouteValidator;
     }
@@ -84,6 +87,7 @@ public class DriverService : IDriverService
 
         if (requeuedShipments.Count > 0)
         {
+            await _priorityAssignment.RecalculatePrioritiesAsync(cancellationToken);
             await NotifyAdminsAsync(driver, route, requeuedShipments, request, cancellationToken);
         }
     }

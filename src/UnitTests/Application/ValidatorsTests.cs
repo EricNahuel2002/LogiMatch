@@ -3,6 +3,7 @@ using Application.Dtos.Routes;
 using Application.Dtos.RouteStops;
 using Application.Dtos.Shipments;
 using Application.Validators;
+using Domain.Enums;
 
 namespace UnitTests.Application;
 
@@ -206,5 +207,48 @@ public class ValidatorsTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.PropertyName == "Note");
+    }
+
+    [Fact]
+    public void RegisterDeliveryAttemptValidator_WhenFailedWithoutReason_Fails()
+    {
+        var validator = new RegisterDeliveryAttemptValidator();
+
+        var result = validator.Validate(new RegisterDeliveryAttemptRequest
+        {
+            Succeeded = false
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "FailureReason");
+    }
+
+    [Fact]
+    public void RegisterDeliveryAttemptValidator_WhenFailedWithReason_Passes()
+    {
+        var validator = new RegisterDeliveryAttemptValidator();
+
+        var result = validator.Validate(new RegisterDeliveryAttemptRequest
+        {
+            Succeeded = false,
+            FailureReason = DeliveryFailureReason.CustomerAbsent
+        });
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void RegisterDeliveryAttemptValidator_WhenSucceededWithReason_Fails()
+    {
+        var validator = new RegisterDeliveryAttemptValidator();
+
+        var result = validator.Validate(new RegisterDeliveryAttemptRequest
+        {
+            Succeeded = true,
+            FailureReason = DeliveryFailureReason.Other
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "FailureReason");
     }
 }

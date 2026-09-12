@@ -15,6 +15,11 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(s => s.Priority)
+            .HasConversion<string>()
+            .HasMaxLength(10)
+            .IsRequired();
+
         builder.HasOne(s => s.Order)
             .WithOne(o => o.Shipment)
             .HasForeignKey<Shipment>(s => s.OrderId)

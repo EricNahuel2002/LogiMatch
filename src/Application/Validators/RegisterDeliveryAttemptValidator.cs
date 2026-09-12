@@ -15,5 +15,15 @@ public class RegisterDeliveryAttemptValidator : AbstractValidator<RegisterDelive
             .NotEqual(Guid.Empty)
             .When(x => x.RouteStopId.HasValue)
             .WithMessage("Route stop id cannot be empty when provided.");
+
+        RuleFor(x => x.FailureReason)
+            .NotNull()
+            .When(x => !x.Succeeded)
+            .WithMessage("A failed delivery attempt requires a failure reason.");
+
+        RuleFor(x => x.FailureReason)
+            .Null()
+            .When(x => x.Succeeded)
+            .WithMessage("A successful delivery attempt cannot have a failure reason.");
     }
 }

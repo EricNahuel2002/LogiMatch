@@ -13,6 +13,9 @@ public class DeliveryAttemptConfiguration : IEntityTypeConfiguration<DeliveryAtt
         builder.Property(a => a.AttemptNumber).IsRequired();
         builder.Property(a => a.AttemptedAt).IsRequired();
         builder.Property(a => a.Succeeded).IsRequired();
+        builder.Property(a => a.FailureReason)
+            .HasConversion<string>()
+            .HasMaxLength(20);
         builder.Property(a => a.Note).HasMaxLength(500);
 
         builder.HasIndex(a => new { a.ShipmentId, a.AttemptNumber }).IsUnique();

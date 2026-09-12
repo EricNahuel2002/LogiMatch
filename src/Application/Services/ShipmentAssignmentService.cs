@@ -122,7 +122,8 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
         }
 
         var ranked = DriverScoring.Rank(feasible);
-        var recommendedDriverId = ranked[0].DriverId;
+        var rankIndex = PriorityToRankIndex(shipment.Priority, ranked.Count);
+        var recommendedDriverId = ranked[rankIndex].DriverId;
 
         var ranking = ranked
             .Select(result => new DriverRankingItem(
@@ -136,7 +137,24 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                 result.Input.FreeCapacityKg))
             .ToList();
 
-        return new DriverAssignmentSuggestion(shipmentId, recommendedDriverId, ranking);
+        return new DriverAssignmentSuggestion(shipmentId, recommendedDriverId, ranking, shipment.Priority);
+    }
+
+    private static int PriorityToRankIndex(ShipmentPriority priority, int count)
+    {
+        if (count <= 1)
+        {
+            return 0;
+        }
+
+        return priority switch
+        {
+            ShipmentPriority.Urgent => 0,
+            ShipmentPriority.High => (int)Math.Floor((count - 1) * 0.25d),
+            ShipmentPriority.Normal => (int)Math.Floor((count - 1) * 0.5d),
+            ShipmentPriority.Low => count - 1,
+            _ => 0
+        };
     }
 
     private static (DateTime StartUtc, DateTime EndUtc) GetCurrentArgentinaDayUtc()

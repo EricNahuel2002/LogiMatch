@@ -1,4 +1,5 @@
 using Domain.Common;
+using Domain.Enums;
 
 namespace Domain.Entities;
 
@@ -20,6 +21,7 @@ public class DeliveryAttempt : BaseEntity
     public int AttemptNumber { get; private set; }
     public DateTime AttemptedAt { get; private set; }
     public bool Succeeded { get; private set; }
+    public DeliveryFailureReason? FailureReason { get; private set; }
     public string? Note { get; private set; }
 
     public static DeliveryAttempt Create(
@@ -29,6 +31,7 @@ public class DeliveryAttempt : BaseEntity
         int attemptNumber,
         DateTime attemptedAt,
         bool succeeded,
+        DeliveryFailureReason? failureReason,
         string? note)
     {
         return new DeliveryAttempt
@@ -39,6 +42,7 @@ public class DeliveryAttempt : BaseEntity
             AttemptNumber = attemptNumber,
             AttemptedAt = attemptedAt,
             Succeeded = succeeded,
+            FailureReason = failureReason,
             Note = note
         };
     }

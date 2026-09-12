@@ -1,3 +1,5 @@
+using Domain.Enums;
+
 namespace Application.Dtos.Shipments;
 
 public sealed record DriverRankingItem(
@@ -13,4 +15,5 @@ public sealed record DriverRankingItem(
 public sealed record DriverAssignmentSuggestion(
     Guid ShipmentId,
     Guid RecommendedDriverId,
-    IReadOnlyList<DriverRankingItem> Ranking);
+    IReadOnlyList<DriverRankingItem> Ranking,
+    ShipmentPriority Priority);

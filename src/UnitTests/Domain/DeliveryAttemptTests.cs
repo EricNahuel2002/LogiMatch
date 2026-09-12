@@ -42,15 +42,15 @@ public class DeliveryAttemptTests
         var shipment = BuildArrivedShipment();
         var t0 = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 
-        shipment.RegisterDeliveryAttempt(null, false, attemptedAt: t0);
-        shipment.RegisterDeliveryAttempt(null, false, attemptedAt: t0.AddMinutes(5));
-        shipment.RegisterDeliveryAttempt(null, false, attemptedAt: t0.AddMinutes(10));
+        shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.Other, attemptedAt: t0);
+        shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.Other, attemptedAt: t0.AddMinutes(5));
+        shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.Other, attemptedAt: t0.AddMinutes(10));
 
         Assert.Equal(ShipmentStatus.DeliveryFailed, shipment.Status);
         Assert.Equal(3, shipment.DeliveryAttempts.Count);
 
         Assert.Throws<InvalidOperationException>(
-            () => shipment.RegisterDeliveryAttempt(null, false, attemptedAt: t0.AddMinutes(15)));
+            () => shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.Other, attemptedAt: t0.AddMinutes(15)));
     }
 
     [Fact]
@@ -59,9 +59,9 @@ public class DeliveryAttemptTests
         var shipment = BuildArrivedShipment();
         var t0 = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 
-        shipment.RegisterDeliveryAttempt(null, false, attemptedAt: t0);
+        shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.Other, attemptedAt: t0);
 
         Assert.Throws<InvalidOperationException>(
-            () => shipment.RegisterDeliveryAttempt(null, false, attemptedAt: t0.AddMinutes(1)));
+            () => shipment.RegisterDeliveryAttempt(null, false, DeliveryFailureReason.Other, attemptedAt: t0.AddMinutes(1)));
     }
 }

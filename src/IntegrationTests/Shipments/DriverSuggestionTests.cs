@@ -1,5 +1,6 @@
 using Application.Dtos.Shipments;
 using Domain.Entities;
+using Domain.Enums;
 using IntegrationTests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
@@ -38,7 +39,10 @@ public class DriverSuggestionTests
         Assert.NotNull(body);
         Assert.Equal(shipment.Id, body!.ShipmentId);
         Assert.NotEmpty(body.Ranking);
-        Assert.Equal(body.Ranking[0].DriverId, body.RecommendedDriverId);
+        Assert.Equal(ShipmentPriority.Normal, body.Priority);
+
+        var medianIndex = (int)Math.Floor((body.Ranking.Count - 1) * 0.5d);
+        Assert.Equal(body.Ranking[medianIndex].DriverId, body.RecommendedDriverId);
     }
 
     [Fact]
