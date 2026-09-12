@@ -23,7 +23,6 @@ public class ShipmentRepository : IShipmentRepository
     {
         return _db.Shipments
             .Include(s => s.Order)
-                .ThenInclude(o => o.Customer)
             .Include(s => s.DeliveryAttempts)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
@@ -46,21 +45,49 @@ public class ShipmentRepository : IShipmentRepository
                 .ThenInclude(rs => rs.Route)
             .Include(s => s.Order)
                 .ThenInclude(o => o.Items)
-            .Include(s => s.Order)
-                .ThenInclude(o => o.Customer)
             .ToListAsync(cancellationToken);
 
+        if (shipments.Count == 0)
+        {
+            return [];
+        }
+
+        var customerIds = shipments
+            .Select(s => s.Order.CustomerId)
+            .Distinct()
+            .ToList();
+
+        var outcomes = await _db.Shipments
+            .Where(s => (s.Status == ShipmentStatus.DeliveryFailed || s.Status == ShipmentStatus.Finalized)
+                && customerIds.Contains(s.Order.CustomerId))
+            .GroupBy(s => s.Order.CustomerId)
+            .Select(g => new
+            {
+                CustomerId = g.Key,
+                DeliveryFailedCount = g.Count(s => s.Status == ShipmentStatus.DeliveryFailed),
+                FinalizedCount = g.Count(s => s.Status == ShipmentStatus.Finalized)
+            })
+            .ToDictionaryAsync(
+                o => o.CustomerId,
+                o => (DeliveryFailed: o.DeliveryFailedCount, Finalized: o.FinalizedCount),
+                cancellationToken);
+
         return shipments
-            .Select(s => new PendingShipmentPriorityData(
-                s,
-                s.RouteStop?.Route?.Origin,
-                s.RouteStop?.Coordinate,
-                s.Order.Items.Sum(i => i.WeightKg * i.Quantity),
-                s.Order.DeliveryWindowStartAt is { } start && s.Order.DeliveryWindowEndAt is { } end
-                    ? (double?)(end - start).TotalMinutes
-                    : null,
-                s.Order.Customer.AbsentDeliveriesCount,
-                s.Order.Customer.SucceededDeliveriesCount))
+            .Select(s =>
+            {
+                outcomes.TryGetValue(s.Order.CustomerId, out var counts);
+
+                return new PendingShipmentPriorityData(
+                    s,
+                    s.RouteStop?.Route?.Origin,
+                    s.RouteStop?.Coordinate,
+                    s.Order.Items.Sum(i => i.WeightKg * i.Quantity),
+                    s.Order.DeliveryWindowStartAt is { } start && s.Order.DeliveryWindowEndAt is { } end
+                        ? (double?)(end - start).TotalMinutes
+                        : null,
+                    counts.DeliveryFailed,
+                    counts.Finalized);
+            })
             .ToList();
     }
 

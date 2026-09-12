@@ -36,8 +36,8 @@ public class ShipmentPriorityAssignmentService : IShipmentPriorityAssignmentServ
                 p.WindowSpanMinutes,
                 distanceByShipment.TryGetValue(p.Shipment.Id, out var distance) ? distance : null,
                 p.WeightKg,
-                p.AbsentDeliveriesCount,
-                p.SucceededDeliveriesCount))
+                p.DeliveryFailedCount,
+                p.FinalizedCount))
             .ToList();
 
         var results = ShipmentPriorityScoring.Assign(inputs);

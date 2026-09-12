@@ -48,7 +48,7 @@ public class PriorityRecalculationTests
     }
 
     [Fact]
-    public async Task RegisterDeliveryAttempt_WhenCustomerAbsent_IncrementsAbsentDeliveriesCount()
+    public async Task RegisterDeliveryAttempt_WhenMaxAttemptsReached_MarksShipmentDeliveryFailed()
     {
         using var arrange = _fixture.Factory.OpenDatabaseAsync();
         var shipment = await TestDataBuilder.CreatePendingShipmentAsync(
@@ -58,27 +58,33 @@ public class PriorityRecalculationTests
         shipment.MarkArrivedAtDestination();
         await arrange.Db.SaveChangesAsync();
 
-        var before = shipment.Order.Customer.AbsentDeliveriesCount;
-
         using var client = await _fixture.Factory.CreateAuthorizedClientAsync(
             ApiWebApplicationFactory.DriverEmail,
             ApiWebApplicationFactory.UsersPassword);
 
-        var response = await client.PostAsJsonAsync(
-            $"/api/shipments/{shipment.Id}/delivery-attempts",
-            new RegisterDeliveryAttemptRequest
-            {
-                Succeeded = false,
-                FailureReason = DeliveryFailureReason.CustomerAbsent,
-                Note = "Nadie atendió"
-            });
+        var baseTime = DateTime.UtcNow;
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        for (var i = 0; i < Shipment.MaxDeliveryAttempts; i++)
+        {
+            var response = await client.PostAsJsonAsync(
+                $"/api/shipments/{shipment.Id}/delivery-attempts",
+                new RegisterDeliveryAttemptRequest
+                {
+                    Succeeded = false,
+                    FailureReason = DeliveryFailureReason.CustomerAbsent,
+                    Note = "Nadie atendió",
+                    AttemptedAt = baseTime.AddMinutes(i * 6)
+                });
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
 
         using var verify = _fixture.Factory.OpenDatabaseAsync();
-        var storedCustomer = await verify.Db.Users.OfType<Customer>()
-            .SingleAsync(c => c.Id == shipment.Order.CustomerId);
+        var stored = await verify.Db.Shipments
+            .Include(s => s.DeliveryAttempts)
+            .SingleAsync(s => s.Id == shipment.Id);
 
-        Assert.Equal(before + 1, storedCustomer.AbsentDeliveriesCount);
+        Assert.Equal(ShipmentStatus.DeliveryFailed, stored.Status);
+        Assert.Equal(Shipment.MaxDeliveryAttempts, stored.DeliveryAttempts.Count);
     }
 }

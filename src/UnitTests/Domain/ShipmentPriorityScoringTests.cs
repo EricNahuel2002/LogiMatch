@@ -95,12 +95,12 @@ public class ShipmentPriorityScoringTests
     [InlineData(0, 5, 0)]
     [InlineData(2, 4, 0.5)]
     [InlineData(5, 10, 0.5)]
-    public void AbsentRate_ComputesQuotientWithGuard(
-        int absent,
-        int succeeded,
+    public void ClientAbsenceRate_ComputesQuotientWithGuard(
+        int deliveryFailed,
+        int finalized,
         decimal expected)
     {
-        Assert.Equal(expected, ShipmentPriorityScoring.AbsentRate(absent, succeeded));
+        Assert.Equal(expected, ShipmentPriorityScoring.ClientAbsenceRate(deliveryFailed, finalized));
     }
 
     [Theory]

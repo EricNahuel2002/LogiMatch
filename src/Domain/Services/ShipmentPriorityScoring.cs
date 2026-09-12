@@ -7,8 +7,8 @@ public sealed record ShipmentPriorityInput(
     double? WindowSpanMinutes,
     double? DistanceMeters,
     decimal WeightKg,
-    int AbsentDeliveriesCount,
-    int SucceededDeliveriesCount);
+    int DeliveryFailedCount,
+    int FinalizedCount);
 
 public sealed record ShipmentPriorityResult(Guid ShipmentId, decimal Score, ShipmentPriority Priority);
 
@@ -17,13 +17,13 @@ public static class ShipmentPriorityScoring
     public const decimal WindowSpanWeight = 4m;
     public const decimal DistanceWeight = 3m;
     public const decimal WeightWeight = 2m;
-    public const decimal AbsenceRateWeight = 2m;
+    public const decimal ClientAbsenceRateWeight = 2m;
 
     public const decimal TotalWeight =
         WindowSpanWeight
         + DistanceWeight
         + WeightWeight
-        + AbsenceRateWeight;
+        + ClientAbsenceRateWeight;
 
     public const decimal LowThreshold = 0.25m;
     public const decimal NormalThreshold = 0.5m;
@@ -58,8 +58,8 @@ public static class ShipmentPriorityScoring
         var minWeight = inputs.Min(i => i.WeightKg);
         var maxWeight = inputs.Max(i => i.WeightKg);
 
-        var minRate = inputs.Min(i => AbsentRate(i.AbsentDeliveriesCount, i.SucceededDeliveriesCount));
-        var maxRate = inputs.Max(i => AbsentRate(i.AbsentDeliveriesCount, i.SucceededDeliveriesCount));
+        var minRate = inputs.Min(i => ClientAbsenceRate(i.DeliveryFailedCount, i.FinalizedCount));
+        var maxRate = inputs.Max(i => ClientAbsenceRate(i.DeliveryFailedCount, i.FinalizedCount));
 
         return inputs
             .Select(i =>
@@ -77,14 +77,14 @@ public static class ShipmentPriorityScoring
 
                 var weightNormalized = NormalizeHigher(i.WeightKg, minWeight, maxWeight);
 
-                var absentRate = AbsentRate(i.AbsentDeliveriesCount, i.SucceededDeliveriesCount);
-                var absenceNormalized = NormalizeLower(absentRate, minRate, maxRate);
+                var clientAbsenceRate = ClientAbsenceRate(i.DeliveryFailedCount, i.FinalizedCount);
+                var absenceNormalized = NormalizeLower(clientAbsenceRate, minRate, maxRate);
 
                 var weighted =
                     WindowSpanWeight * windowTightness
                     + DistanceWeight * distanceFactor
                     + WeightWeight * weightNormalized
-                    + AbsenceRateWeight * absenceNormalized;
+                    + ClientAbsenceRateWeight * absenceNormalized;
 
                 var score = Clamp(weighted / TotalWeight, 0m, 1m);
 
@@ -115,14 +115,14 @@ public static class ShipmentPriorityScoring
         return ShipmentPriority.Urgent;
     }
 
-    public static decimal AbsentRate(int absentDeliveriesCount, int succeededDeliveriesCount)
+    public static decimal ClientAbsenceRate(int deliveryFailedCount, int finalizedCount)
     {
-        if (succeededDeliveriesCount == 0)
+        if (finalizedCount == 0)
         {
-            return absentDeliveriesCount > 0 ? 1m : 0m;
+            return deliveryFailedCount > 0 ? 1m : 0m;
         }
 
-        return absentDeliveriesCount / (decimal)succeededDeliveriesCount;
+        return deliveryFailedCount / (decimal)finalizedCount;
     }
 
     private static decimal NormalizeHigher(decimal value, decimal min, decimal max)

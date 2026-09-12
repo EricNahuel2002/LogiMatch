@@ -156,7 +156,7 @@ public class ShipmentServiceTests
     }
 
     [Fact]
-    public async Task RegisterDeliveryAttemptAsync_WhenSucceeded_FinalizesShipment()
+    public async Task RegisterDeliveryAttemptAsync_WhenSucceeded_FinalizesAndRecalculatesPriorities()
     {
         var shipment = BuildPendingShipment();
         shipment.Start();
@@ -172,6 +172,9 @@ public class ShipmentServiceTests
         Assert.Equal(ShipmentStatus.Finalized, shipment.Status);
         Assert.Single(shipment.DeliveryAttempts);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _priorityAssignment.Verify(
+            p => p.RecalculatePrioritiesAsync(It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -196,10 +199,13 @@ public class ShipmentServiceTests
         Assert.Equal(ShipmentStatus.Arrived, shipment.Status);
         Assert.Single(shipment.DeliveryAttempts);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _priorityAssignment.Verify(
+            p => p.RecalculatePrioritiesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
-    public async Task RegisterDeliveryAttemptAsync_WhenCustomerAbsent_RegistersAbsentDeliveryOnce()
+    public async Task RegisterDeliveryAttemptAsync_WhenMaxAttemptsReached_MarksDeliveryFailedAndRecalculatesPriorities()
     {
         var shipment = BuildPendingShipment();
         shipment.Start();
@@ -224,54 +230,21 @@ public class ShipmentServiceTests
             {
                 Succeeded = false,
                 FailureReason = DeliveryFailureReason.CustomerAbsent,
-                AttemptedAt = baseTime.AddMinutes(10)
+                AttemptedAt = baseTime.AddMinutes(6)
             });
-
-        Assert.Equal(1, shipment.Order.Customer.AbsentDeliveriesCount);
-        _priorityAssignment.Verify(
-            p => p.RecalculatePrioritiesAsync(It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
-    public async Task RegisterDeliveryAttemptAsync_WhenRefused_DoesNotRegisterAbsentDelivery()
-    {
-        var shipment = BuildPendingShipment();
-        shipment.Start();
-        shipment.MarkArrivedAtDestination();
-        _shipments.Setup(r => r.GetByIdWithDetailsAsync(shipment.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(shipment);
-
-        var service = CreateService();
         await service.RegisterDeliveryAttemptAsync(
             shipment.Id,
             new RegisterDeliveryAttemptRequest
             {
                 Succeeded = false,
-                FailureReason = DeliveryFailureReason.Refused,
-                Note = "Client refused package"
+                FailureReason = DeliveryFailureReason.CustomerAbsent,
+                AttemptedAt = baseTime.AddMinutes(12)
             });
 
-        Assert.Equal(0, shipment.Order.Customer.AbsentDeliveriesCount);
+        Assert.Equal(ShipmentStatus.DeliveryFailed, shipment.Status);
+        Assert.Equal(3, shipment.DeliveryAttempts.Count);
         _priorityAssignment.Verify(
             p => p.RecalculatePrioritiesAsync(It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task RegisterDeliveryAttemptAsync_WhenSucceeded_RegistersSuccessfulDelivery()
-    {
-        var shipment = BuildPendingShipment();
-        shipment.Start();
-        shipment.MarkArrivedAtDestination();
-        _shipments.Setup(r => r.GetByIdWithDetailsAsync(shipment.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(shipment);
-
-        var service = CreateService();
-        await service.RegisterDeliveryAttemptAsync(
-            shipment.Id,
-            new RegisterDeliveryAttemptRequest { Succeeded = true });
-
-        Assert.Equal(1, shipment.Order.Customer.SucceededDeliveriesCount);
+            Times.Once);
     }
 }

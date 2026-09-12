@@ -9,5 +9,5 @@ public sealed record PendingShipmentPriorityData(
     Coordinate? Destination,
     decimal WeightKg,
     double? WindowSpanMinutes,
-    int AbsentDeliveriesCount,
-    int SucceededDeliveriesCount);
+    int DeliveryFailedCount,
+    int FinalizedCount);

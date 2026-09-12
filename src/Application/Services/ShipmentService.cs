@@ -128,23 +128,9 @@ public class ShipmentService : IShipmentService
 
         shipment.RegisterDeliveryAttempt(routeStop, request.Succeeded, request.FailureReason, request.Note, request.AttemptedAt);
 
-        var registeredAbsent = !request.Succeeded
-            && request.FailureReason == DeliveryFailureReason.CustomerAbsent
-            && shipment.DeliveryAttempts.Count(
-                a => a.FailureReason == DeliveryFailureReason.CustomerAbsent) == 1;
-
-        if (request.Succeeded)
-        {
-            shipment.Order.Customer.RegisterSuccessfulDelivery();
-        }
-        else if (registeredAbsent)
-        {
-            shipment.Order.Customer.RegisterAbsentDelivery();
-        }
-
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        if (registeredAbsent)
+        if (shipment.Status is ShipmentStatus.DeliveryFailed or ShipmentStatus.Finalized)
         {
             await _priorityAssignment.RecalculatePrioritiesAsync(cancellationToken);
         }
