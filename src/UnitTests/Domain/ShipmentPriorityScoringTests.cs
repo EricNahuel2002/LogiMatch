@@ -104,6 +104,23 @@ public class ShipmentPriorityScoringTests
     }
 
     [Theory]
+    [InlineData(ShipmentPriority.Urgent, 0, 0)]
+    [InlineData(ShipmentPriority.Low, 1, 0)]
+    [InlineData(ShipmentPriority.Urgent, 5, 0)]
+    [InlineData(ShipmentPriority.High, 5, 1)]
+    [InlineData(ShipmentPriority.High, 9, 2)]
+    [InlineData(ShipmentPriority.Normal, 5, 2)]
+    [InlineData(ShipmentPriority.Normal, 10, 4)]
+    [InlineData(ShipmentPriority.Low, 5, 4)]
+    public void PriorityToRankIndex_MapsPriorityToRankingPosition(
+        ShipmentPriority priority,
+        int count,
+        int expected)
+    {
+        Assert.Equal(expected, ShipmentPriorityScoring.PriorityToRankIndex(priority, count));
+    }
+
+    [Theory]
     [InlineData(0.00, ShipmentPriority.Low)]
     [InlineData(0.24, ShipmentPriority.Low)]
     [InlineData(0.25, ShipmentPriority.Normal)]

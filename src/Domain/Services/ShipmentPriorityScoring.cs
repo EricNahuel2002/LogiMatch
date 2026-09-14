@@ -125,6 +125,23 @@ public static class ShipmentPriorityScoring
         return deliveryFailedCount / (decimal)finalizedCount;
     }
 
+    public static int PriorityToRankIndex(ShipmentPriority priority, int count)
+    {
+        if (count <= 1)
+        {
+            return 0;
+        }
+
+        return priority switch
+        {
+            ShipmentPriority.Urgent => 0,
+            ShipmentPriority.High => (int)Math.Floor((count - 1) * 0.25d),
+            ShipmentPriority.Normal => (int)Math.Floor((count - 1) * 0.5d),
+            ShipmentPriority.Low => count - 1,
+            _ => 0
+        };
+    }
+
     private static decimal NormalizeHigher(decimal value, decimal min, decimal max)
     {
         return max == min ? 0.5m : (value - min) / (max - min);
