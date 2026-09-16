@@ -14,6 +14,8 @@ public class DriverConfiguration : IEntityTypeConfiguration<Driver>
             o.Property(c => c.Longitude).HasColumnType("decimal(9,6)");
         });
 
+        builder.Property(d => d.SalaryPerHour).HasColumnType("decimal(18,2)");
+
         builder.HasMany(d => d.Vehicles)
             .WithMany(v => v.Drivers);
     }

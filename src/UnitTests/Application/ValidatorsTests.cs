@@ -196,6 +196,40 @@ public class ValidatorsTests
     }
 
     [Fact]
+    public void CreateRouteStopValidator_WhenDistanceMetersNegative_Fails()
+    {
+        var validator = new CreateRouteStopValidator();
+
+        var result = validator.Validate(new CreateRouteStopRequest
+        {
+            ShipmentId = Guid.NewGuid(),
+            Address = "Av. Rivadavia 123",
+            StopOrder = 1,
+            DistanceMeters = -1m
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "DistanceMeters");
+    }
+
+    [Fact]
+    public void CreateRouteStopValidator_WhenTollCostNegative_Fails()
+    {
+        var validator = new CreateRouteStopValidator();
+
+        var result = validator.Validate(new CreateRouteStopRequest
+        {
+            ShipmentId = Guid.NewGuid(),
+            Address = "Av. Rivadavia 123",
+            StopOrder = 1,
+            TollCost = -1m
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "TollCost");
+    }
+
+    [Fact]
     public void RegisterDeliveryAttemptValidator_WhenNoteTooLong_Fails()
     {
         var validator = new RegisterDeliveryAttemptValidator();

@@ -7,7 +7,8 @@ public sealed record DriverScoringInput(
     int InProgressShipmentCount,
     int DistanceMeters,
     int DurationMinutes,
-    decimal FreeCapacityKg);
+    decimal FreeCapacityKg,
+    decimal EstimatedOperationCost = 0m);
 
 public sealed record DriverScoringResult(Guid DriverId, decimal Score, DriverScoringInput Input);
 
@@ -19,6 +20,7 @@ public static class DriverScoring
     public const decimal DistanceWeight = 5m;
     public const decimal DurationWeight = 5m;
     public const decimal FreeCapacityWeight = 1m;
+    public const decimal OperationCostWeight = 5m;
 
     public const decimal TotalWeight =
         SuccessAttemptsWeight
@@ -26,7 +28,8 @@ public static class DriverScoring
         + InProgressShipmentCountWeight
         + DistanceWeight
         + DurationWeight
-        + FreeCapacityWeight;
+        + FreeCapacityWeight
+        + OperationCostWeight;
 
     public static IReadOnlyList<DriverScoringResult> Rank(IReadOnlyList<DriverScoringInput> candidates)
     {
@@ -49,6 +52,8 @@ public static class DriverScoring
         var maxDuration = candidates.Max(c => c.DurationMinutes);
         var minCapacity = candidates.Min(c => c.FreeCapacityKg);
         var maxCapacity = candidates.Max(c => c.FreeCapacityKg);
+        var minCost = candidates.Min(c => c.EstimatedOperationCost);
+        var maxCost = candidates.Max(c => c.EstimatedOperationCost);
 
         return candidates
             .Select(c =>
@@ -59,11 +64,13 @@ public static class DriverScoring
                     + InProgressShipmentCountWeight * NormalizeLower(c.InProgressShipmentCount, minInProgress, maxInProgress)
                     + DistanceWeight * NormalizeLower(c.DistanceMeters, minDistance, maxDistance)
                     + DurationWeight * NormalizeLower(c.DurationMinutes, minDuration, maxDuration)
-                    + FreeCapacityWeight * NormalizeHigher(c.FreeCapacityKg, minCapacity, maxCapacity);
+                    + FreeCapacityWeight * NormalizeHigher(c.FreeCapacityKg, minCapacity, maxCapacity)
+                    + OperationCostWeight * NormalizeLower(c.EstimatedOperationCost, minCost, maxCost);
 
                 return new DriverScoringResult(c.DriverId, weighted / TotalWeight, c);
             })
             .OrderByDescending(r => r.Score)
+            .ThenBy(r => r.Input.EstimatedOperationCost)
             .ThenBy(r => r.Input.DistanceMeters)
             .ThenBy(r => r.Input.DurationMinutes)
             .ThenBy(r => r.Input.PendingShipmentCount + r.Input.InProgressShipmentCount)

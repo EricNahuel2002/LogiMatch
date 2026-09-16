@@ -42,7 +42,9 @@ public class RouteStopService : IRouteStopService
             shipment,
             coordinate,
             request.StopOrder,
-            request.Name);
+            request.Name,
+            request.DistanceMeters,
+            request.TollCost);
 
         await _routeStops.AddAsync(routeStop, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

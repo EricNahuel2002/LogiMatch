@@ -51,7 +51,8 @@ public static class DemoDataSeeder
             UserName = DriverEmails[0],
             Email = DriverEmails[0],
             Name = "Carlos",
-            Surname = "Pérez"
+            Surname = "Pérez",
+            SalaryPerHour = 2500m
         }, credential, "Driver");
 
         var driver2 = await EnsureUserAsync(userManager, new Driver
@@ -59,7 +60,8 @@ public static class DemoDataSeeder
             UserName = DriverEmails[1],
             Email = DriverEmails[1],
             Name = "Ana",
-            Surname = "Gómez"
+            Surname = "Gómez",
+            SalaryPerHour = 2400m
         }, credential, "Driver");
 
         var driver3 = await EnsureUserAsync(userManager, new Driver
@@ -67,7 +69,8 @@ public static class DemoDataSeeder
             UserName = DriverEmails[2],
             Email = DriverEmails[2],
             Name = "Marcos",
-            Surname = "Suárez"
+            Surname = "Suárez",
+            SalaryPerHour = 2300m
         }, credential, "Driver");
 
         var driver4 = await EnsureUserAsync(userManager, new Driver
@@ -75,7 +78,8 @@ public static class DemoDataSeeder
             UserName = DriverEmails[3],
             Email = DriverEmails[3],
             Name = "Lucía",
-            Surname = "Fernández"
+            Surname = "Fernández",
+            SalaryPerHour = 2450m
         }, credential, "Driver");
 
         var driver5 = await EnsureUserAsync(userManager, new Driver
@@ -83,35 +87,36 @@ public static class DemoDataSeeder
             UserName = DriverEmails[4],
             Email = DriverEmails[4],
             Name = "Diego",
-            Surname = "Ramírez"
+            Surname = "Ramírez",
+            SalaryPerHour = 2350m
         }, credential, "Driver");
 
         var driver1Vehicles = new[]
         {
-            Vehicle.Create("AA123BB", 1500m, "Toyota", "Hilux"),
-            Vehicle.Create("AB456CC", 1000m, "Ford", "Ranger")
+            Vehicle.Create("AA123BB", 1500m, "Toyota", "Hilux", 0.13m, 1100m, 120m),
+            Vehicle.Create("AB456CC", 1000m, "Ford", "Ranger", 0.11m, 1100m, 90m)
         };
 
         var driver2Vehicles = new[]
         {
-            Vehicle.Create("AC789DD", 1200m, "Renault", "Kangoo"),
-            Vehicle.Create("AD321EE", 800m, "Fiat", "Fiorino")
+            Vehicle.Create("AC789DD", 1200m, "Renault", "Kangoo", 0.09m, 1100m, 70m),
+            Vehicle.Create("AD321EE", 800m, "Fiat", "Fiorino", 0.08m, 1100m, 50m)
         };
 
         var driver3Vehicles = new[]
         {
-            Vehicle.Create("AE111FF", 1000m, "Chevrolet", "S10"),
-            Vehicle.Create("AF222GG", 900m, "Nissan", "Frontier")
+            Vehicle.Create("AE111FF", 1000m, "Chevrolet", "S10", 0.12m, 1100m, 100m),
+            Vehicle.Create("AF222GG", 900m, "Nissan", "Frontier", 0.14m, 1100m, 110m)
         };
 
         var driver4Vehicles = new[]
         {
-            Vehicle.Create("AH333HH", 1100m, "Toyota", "Hilux")
+            Vehicle.Create("AH333HH", 1100m, "Toyota", "Hilux", 0.12m, 1100m, 95m)
         };
 
         var driver5Vehicles = new[]
         {
-            Vehicle.Create("AI444JJ", 2000m, "Ford", "Ranger")
+            Vehicle.Create("AI444JJ", 2000m, "Ford", "Ranger", 0.15m, 1100m, 130m)
         };
 
         var existingPlates = new HashSet<string>(
@@ -175,39 +180,48 @@ public static class DemoDataSeeder
 
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ArgentinaTimeZone);
 
-            var (targetShipment, _, targetRoute) = BuildShipment(
+var (targetShipment, _, targetRoute) = BuildShipment(
                 customer, admin, null,
                 TargetShipmentItemName, 250m, 1, 300m,
                 "Av. Rivadavia 123", new Coordinate(-34.6083m, -58.3816m),
-                nowLocal, nowLocal.AddHours(6));
+                nowLocal, nowLocal.AddHours(6),
+                1500m, 200m);
             shipments.Add(targetShipment);
             routes.Add(targetRoute);
 
             var (driver1Pending1, _, route1) = BuildShipment(
                 customer, admin, driver1,
                 "Bulto textil", 120m, 2, 150m,
-                "Av. Corrientes 345", new Coordinate(-34.5711m, -58.4353m));
+                "Av. Corrientes 345", new Coordinate(-34.5711m, -58.4353m),
+                null, null,
+                3500m, 250m);
             shipments.Add(driver1Pending1);
             routes.Add(route1);
 
             var (driver1Pending2, _, route2) = BuildShipment(
                 customer, admin, driver1,
                 "Equipo de cómputo", 400m, 1, 80m,
-                "Cerrito 512", new Coordinate(-34.6012m, -58.3847m));
+                "Cerrito 512", new Coordinate(-34.6012m, -58.3847m),
+                null, null,
+                1800m, 150m);
             shipments.Add(driver1Pending2);
             routes.Add(route2);
 
             var (driver1Pending3, _, route3) = BuildShipment(
                 customer, admin, driver1,
                 "Mercadería general", 90m, 3, 200m,
-                "Av. La Plata 120", new Coordinate(-34.6280m, -58.4450m));
+                "Av. La Plata 120", new Coordinate(-34.6280m, -58.4450m),
+                null, null,
+                5200m, 300m);
             shipments.Add(driver1Pending3);
             routes.Add(route3);
 
             var (delivered, deliveredStop, route4) = BuildShipment(
                 customer, admin, driver1,
                 "Documentación", 80m, 2, 60m,
-                "Diagonal Norte 730", new Coordinate(-34.6130m, -58.3770m));
+                "Diagonal Norte 730", new Coordinate(-34.6130m, -58.3770m),
+                null, null,
+                2600m, 220m);
             delivered.Start();
             delivered.MarkArrivedAtDestination();
             delivered.RegisterDeliveryAttempt(
@@ -221,30 +235,36 @@ public static class DemoDataSeeder
             var (driver2InProgress, _, route5) = BuildShipment(
                 customer, admin, driver2,
                 "Pallet de bebidas", 400m, 1, 500m,
-                "Av. Hipólito Yrigoyen 9000", new Coordinate(-34.6400m, -58.5050m));
-            driver2InProgress.Start();
+                "Av. Hipólito Yrigoyen 9000", new Coordinate(-34.6400m, -58.5050m),
+                null, null,
+                7800m, 400m);
             shipments.Add(driver2InProgress);
             routes.Add(route5);
 
             var (driver4Pending1, _, route6) = BuildShipment(
                 customer, admin, driver4,
                 "Cajas de vidrio", 180m, 2, 120m,
-                "Av. San Martín 2100", new Coordinate(-34.6980m, -58.5480m));
+                "Av. San Martín 2100", new Coordinate(-34.6980m, -58.5480m),
+                null, null,
+                6500m, 350m);
             shipments.Add(driver4Pending1);
             routes.Add(route6);
 
             var (driver4Pending2, _, route7) = BuildShipment(
                 customer, admin, driver4,
                 "Mercadería suelta", 60m, 4, 80m,
-                "Av. Mitre 4300", new Coordinate(-34.7100m, -58.5600m));
+                "Av. Mitre 4300", new Coordinate(-34.7100m, -58.5600m),
+                null, null,
+                7000m, 380m);
             shipments.Add(driver4Pending2);
             routes.Add(route7);
 
             var (driver5InProgress, _, route8) = BuildShipment(
                 customer, admin, driver5,
                 "Carga pesada", 600m, 2, 700m,
-                "Av. General Paz 1500", new Coordinate(-34.5900m, -58.4400m));
-            driver5InProgress.Start();
+                "Av. General Paz 1500", new Coordinate(-34.5900m, -58.4400m),
+                null, null,
+                10200m, 450m);
             shipments.Add(driver5InProgress);
             routes.Add(route8);
 
@@ -268,7 +288,9 @@ public static class DemoDataSeeder
         string stopName,
         Coordinate stopCoordinate,
         DateTime? deliveryWindowStartAt = null,
-        DateTime? deliveryWindowEndAt = null)
+        DateTime? deliveryWindowEndAt = null,
+        decimal distanceMeters = 0,
+        decimal tollCost = 0)
     {
         var order = Order.Create(
             customer,
@@ -284,7 +306,13 @@ public static class DemoDataSeeder
 
         var shipment = Shipment.Create(order);
         var route = Route.Create(new Coordinate(DepotOrigin.Latitude, DepotOrigin.Longitude));
-        var routeStop = RouteStop.Create(shipment, stopCoordinate, 1, stopName);
+        var routeStop = RouteStop.Create(
+            shipment,
+            stopCoordinate,
+            1,
+            stopName,
+            distanceMeters,
+            tollCost);
         routeStop.AssignToRoute(route);
         route.AddStop(routeStop);
 

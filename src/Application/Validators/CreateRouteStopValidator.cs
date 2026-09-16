@@ -22,5 +22,11 @@ public class CreateRouteStopValidator : AbstractValidator<CreateRouteStopRequest
 
         RuleFor(x => x.Name)
             .Note();
+
+        RuleFor(x => x.DistanceMeters)
+            .GreaterThanOrEqualTo(0);
+
+        RuleFor(x => x.TollCost)
+            .GreaterThanOrEqualTo(0);
     }
 }

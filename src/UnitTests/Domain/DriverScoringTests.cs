@@ -52,6 +52,38 @@ public class DriverScoringTests
     }
 
     [Fact]
+    public void Rank_CheaperOperationDriver_WinsWhenOtherMetricsAreEqual()
+    {
+        var expensive = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 500m);
+        var cheap = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 100m);
+
+        var ranked = DriverScoring.Rank([expensive, cheap]);
+
+        Assert.Equal(cheap.DriverId, ranked[0].DriverId);
+    }
+
+    [Fact]
+    public void Rank_OperationCostIsFirstTieBreak()
+    {
+        var cheapLowSuccess = new DriverScoringInput(Guid.NewGuid(), 0, 1, 1, 1000, 30, 100m, 100m);
+        var pricierHighSuccess = new DriverScoringInput(Guid.NewGuid(), 10, 1, 1, 1000, 30, 100m, 420m);
+        var middle = new DriverScoringInput(Guid.NewGuid(), 5, 1, 1, 1000, 30, 100m, 900m);
+
+        var ranked = DriverScoring.Rank([cheapLowSuccess, pricierHighSuccess, middle]);
+
+        Assert.Equal(ranked[1].Score, ranked[0].Score);
+        Assert.Equal(cheapLowSuccess.DriverId, ranked[0].DriverId);
+        Assert.Equal(pricierHighSuccess.DriverId, ranked[1].DriverId);
+    }
+
+    [Fact]
+    public void OperationCostWeight_EqualsDistanceWeight()
+    {
+        Assert.Equal(DriverScoring.DistanceWeight, DriverScoring.OperationCostWeight);
+        Assert.Equal(5m, DriverScoring.OperationCostWeight);
+    }
+
+    [Fact]
     public void Rank_WithNoCandidates_ReturnsEmpty()
     {
         var ranked = DriverScoring.Rank([]);

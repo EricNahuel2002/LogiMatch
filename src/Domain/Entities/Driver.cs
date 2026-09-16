@@ -4,6 +4,8 @@ namespace Domain.Entities;
 
 public class Driver : User
 {
+    public decimal SalaryPerHour { get; set; }
+
     public Coordinate? CurrentLocation { get; private set; }
 
     public ICollection<Order> Orders { get; set; } = [];

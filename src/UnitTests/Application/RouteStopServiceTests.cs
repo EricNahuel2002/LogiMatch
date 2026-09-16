@@ -55,7 +55,9 @@ public class RouteStopServiceTests
             ShipmentId = shipment.Id,
             Address = "Av. Rivadavia 123",
             StopOrder = 3,
-            Name = "Client A"
+            Name = "Client A",
+            DistanceMeters = 4500m,
+            TollCost = 300m
         });
 
         Assert.Equal(created!.Id, id);
@@ -63,6 +65,8 @@ public class RouteStopServiceTests
         Assert.Equal(3, created.StopOrder);
         Assert.Equal("Client A", created.Name);
         Assert.Equal(new Coordinate(1m, 2m), created.Coordinate);
+        Assert.Equal(4500m, created.DistanceMeters);
+        Assert.Equal(300m, created.TollCost);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -9,4 +9,10 @@ public sealed record DriverAssignmentCandidate(
     int SuccessAttemptsToday,
     int PendingShipmentCount,
     int InProgressShipmentCount,
-    decimal InProgressShipmentWeightKg);
+    decimal InProgressShipmentWeightKg,
+    decimal SalaryPerHour = 0m,
+    decimal KilometersPerDay = 0m,
+    decimal VehicleFuelConsumption = 0m,
+    decimal VehicleFuelPrice = 0m,
+    decimal VehicleMaintenanceCost = 0m,
+    decimal ActiveRouteTollCost = 0m);

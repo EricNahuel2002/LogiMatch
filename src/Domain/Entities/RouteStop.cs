@@ -18,12 +18,16 @@ public class RouteStop : BaseEntity
     public string? Name { get; private set; }
     public Coordinate Coordinate { get; private set; } = new(0, 0);
     public int StopOrder { get; private set; }
+    public decimal DistanceMeters { get; private set; }
+    public decimal TollCost { get; private set; }
 
     public static RouteStop Create(
         Shipment shipment,
         Coordinate coordinate,
         int stopOrder,
-        string? name = null)
+        string? name = null,
+        decimal distanceMeters = 0,
+        decimal tollCost = 0)
     {
         ArgumentNullException.ThrowIfNull(shipment);
 
@@ -32,13 +36,25 @@ public class RouteStop : BaseEntity
             throw new ArgumentException("Stop order must be greater than zero.", nameof(stopOrder));
         }
 
+        if (distanceMeters < 0)
+        {
+            throw new ArgumentException("Distance must be greater than or equal to zero.", nameof(distanceMeters));
+        }
+
+        if (tollCost < 0)
+        {
+            throw new ArgumentException("Toll cost must be greater than or equal to zero.", nameof(tollCost));
+        }
+
         return new RouteStop
         {
             ShipmentId = shipment.Id,
             Shipment = shipment,
             Coordinate = coordinate,
             StopOrder = stopOrder,
-            Name = name
+            Name = name,
+            DistanceMeters = distanceMeters,
+            TollCost = tollCost
         };
     }
 

@@ -29,7 +29,7 @@ public class RouteConfiguration : IEntityTypeConfiguration<Route>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(r => r.Vehicle)
-            .WithMany()
+            .WithMany(v => v.Routes)
             .HasForeignKey(r => r.VehicleId)
             .OnDelete(DeleteBehavior.Restrict);
 

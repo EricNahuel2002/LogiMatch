@@ -45,7 +45,8 @@ public class ShipmentAssignmentServiceTests
         decimal inProgressWeightKg = 0m,
         int pending = 0,
         int inProgress = 0,
-        int attempts = 0)
+        int attempts = 0,
+        decimal salaryPerHour = 0m)
     {
         return new DriverAssignmentCandidate(
             driverId,
@@ -54,7 +55,8 @@ public class ShipmentAssignmentServiceTests
             attempts,
             pending,
             inProgress,
-            inProgressWeightKg);
+            inProgressWeightKg,
+            salaryPerHour);
     }
 
     private void SetupDrivingMetrics(params (Guid DriverId, int Meters, int Minutes)[] metrics)
@@ -313,6 +315,34 @@ public class ShipmentAssignmentServiceTests
 
         Assert.Single(suggestion.Ranking);
         Assert.Equal(freeDriver, suggestion.Ranking[0].DriverId);
+    }
+
+    [Fact]
+    public async Task SuggestDriverAsync_CheaperOperationDriver_WinsWhenOtherMetricsAreEqual()
+    {
+        var shipment = BuildPendingShipmentWithStop();
+        var expensiveDriver = Guid.NewGuid();
+        var cheapDriver = Guid.NewGuid();
+
+        _shipments.Setup(r => r.GetByIdWithAssignmentDetailsAsync(
+            shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+        _users.Setup(u => u.GetDriverCandidatesAsync(
+            It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                Candidate(expensiveDriver, 100m, attempts: 2, salaryPerHour: 100m),
+                Candidate(cheapDriver, 100m, attempts: 2, salaryPerHour: 50m)
+            ]);
+        SetupDrivingMetrics((expensiveDriver, 1000, 10), (cheapDriver, 1000, 10));
+
+        var service = CreateService();
+        var suggestion = await service.SuggestDriverAsync(shipment.Id);
+
+        Assert.Equal(cheapDriver, suggestion.RecommendedDriverId);
+        Assert.Equal(2, suggestion.Ranking.Count);
+        Assert.Equal(cheapDriver, suggestion.Ranking[0].DriverId);
+        Assert.Equal(100m, suggestion.Ranking[0].EstimatedOperationCost);
     }
 
     [Fact]

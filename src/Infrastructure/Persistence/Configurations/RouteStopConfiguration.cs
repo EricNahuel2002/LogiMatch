@@ -12,6 +12,8 @@ public class RouteStopConfiguration : IEntityTypeConfiguration<RouteStop>
 
         builder.Property(rs => rs.Name).HasMaxLength(200);
         builder.Property(rs => rs.StopOrder).IsRequired();
+        builder.Property(rs => rs.DistanceMeters).HasColumnType("decimal(18,2)");
+        builder.Property(rs => rs.TollCost).HasColumnType("decimal(18,2)");
 
         builder.HasIndex(rs => rs.ShipmentId).IsUnique();
 

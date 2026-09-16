@@ -45,7 +45,7 @@ public class UserRepository : IUserRepository
     {
         var drivers = await _db.Users.OfType<Driver>()
             .AsNoTracking()
-            .Select(d => new { d.Id, d.CurrentLocation })
+            .Select(d => new { d.Id, d.CurrentLocation, d.SalaryPerHour })
             .ToListAsync(cancellationToken);
 
         var driverIds = drivers.Select(d => d.Id).ToList();
@@ -86,9 +86,38 @@ public class UserRepository : IUserRepository
             })
             .ToListAsync(cancellationToken);
 
+        var kilometersToday = await _db.RouteStops
+            .Where(rs => rs.Route != null
+                && rs.Route.DriverId != null
+                && driverIds.Contains(rs.Route.DriverId.Value)
+                && rs.Shipment.ArrivedAtDestination
+                && rs.Shipment.History.Any(h => h.Status == ShipmentStatus.Arrived
+                    && h.RecordedAt >= dayStartUtc
+                    && h.RecordedAt < dayEndUtc))
+            .GroupBy(rs => rs.Route!.DriverId!.Value)
+            .Select(g => new { DriverId = g.Key, TotalMeters = g.Sum(rs => (decimal)rs.DistanceMeters) })
+            .ToListAsync(cancellationToken);
+
+        var activeRoutes = await _db.Routes
+            .AsNoTracking()
+            .Where(r => r.DriverId != null
+                && driverIds.Contains(r.DriverId.Value)
+                && r.IsActive)
+            .Select(r => new
+            {
+                r.DriverId,
+                r.Vehicle,
+                TollCost = r.RouteStops.Sum(rs => (decimal)rs.TollCost)
+            })
+            .ToListAsync(cancellationToken);
+
         var capacityByDriver = capacities.ToDictionary(x => x.DriverId, x => x.MaxCapacityKg);
         var attemptsByDriver = attemptsToday.ToDictionary(x => x.DriverId, x => x.Count);
         var pendingByDriver = pending.ToDictionary(x => x.DriverId, x => x.Count);
+        var kilometersByDriver = kilometersToday.ToDictionary(x => x.DriverId, x => x.TotalMeters / 1000m);
+        var activeRouteByDriver = activeRoutes
+            .GroupBy(x => x.DriverId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var inProgressByDriver = inProgress
             .GroupBy(x => x.AssignedDriverId!.Value)
@@ -102,6 +131,10 @@ public class UserRepository : IUserRepository
                 ? metrics
                 : new { Count = 0, WeightKg = 0m };
 
+            var activeRoute = activeRouteByDriver.GetValueOrDefault(d.Id);
+            var vehicle = activeRoute?.Vehicle;
+            var tollCost = activeRoute?.TollCost ?? 0m;
+
             return new DriverAssignmentCandidate(
                 d.Id,
                 d.CurrentLocation,
@@ -109,7 +142,13 @@ public class UserRepository : IUserRepository
                 attemptsByDriver.GetValueOrDefault(d.Id),
                 pendingByDriver.GetValueOrDefault(d.Id),
                 inProgressMetrics.Count,
-                inProgressMetrics.WeightKg);
+                inProgressMetrics.WeightKg,
+                d.SalaryPerHour,
+                kilometersByDriver.GetValueOrDefault(d.Id),
+                vehicle?.FuelConsumption ?? 0m,
+                vehicle?.FuelPrice ?? 0m,
+                vehicle?.MaintenanceCost ?? 0m,
+                tollCost);
         }).ToList();
 
         return results;

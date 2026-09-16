@@ -70,6 +70,15 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                 continue;
             }
 
+            var estimatedOperationCost = RouteOperationCostCalculator.CalculateEstimatedOperationCost(
+                candidate.SalaryPerHour,
+                candidate.SuccessAttemptsToday,
+                candidate.KilometersPerDay,
+                candidate.VehicleFuelConsumption,
+                candidate.VehicleFuelPrice,
+                candidate.VehicleMaintenanceCost,
+                candidate.ActiveRouteTollCost);
+
             eligible.Add((
                 candidate.DriverId,
                 location,
@@ -80,7 +89,8 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                     candidate.InProgressShipmentCount,
                     0,
                     0,
-                    freeCapacityKg)));
+                    freeCapacityKg,
+                    estimatedOperationCost)));
         }
 
         if (eligible.Count == 0)
@@ -134,7 +144,8 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                 result.Input.InProgressShipmentCount,
                 result.Input.DistanceMeters,
                 result.Input.DurationMinutes,
-                result.Input.FreeCapacityKg))
+                result.Input.FreeCapacityKg,
+                result.Input.EstimatedOperationCost))
             .ToList();
 
         return new DriverAssignmentSuggestion(shipmentId, recommendedDriverId, ranking, shipment.Priority);

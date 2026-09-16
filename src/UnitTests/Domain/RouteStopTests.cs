@@ -30,6 +30,39 @@ public class RouteStopTests
     }
 
     [Fact]
+    public void Create_WithCosts_SetsDistanceAndToll()
+    {
+        var shipment = Shipment.Create(
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
+
+        var stop = RouteStop.Create(
+            shipment, new Coordinate(20, 20), 1, "Cliente A", 4500m, 300m);
+
+        Assert.Equal(4500m, stop.DistanceMeters);
+        Assert.Equal(300m, stop.TollCost);
+    }
+
+    [Fact]
+    public void Create_WithNegativeDistance_Throws()
+    {
+        var shipment = Shipment.Create(
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
+
+        Assert.Throws<ArgumentException>(
+            () => RouteStop.Create(shipment, new Coordinate(20, 20), 1, null, -1m));
+    }
+
+    [Fact]
+    public void Create_WithNegativeTollCost_Throws()
+    {
+        var shipment = Shipment.Create(
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
+
+        Assert.Throws<ArgumentException>(
+            () => RouteStop.Create(shipment, new Coordinate(20, 20), 1, null, 0m, -1m));
+    }
+
+    [Fact]
     public void AssignToRoute_SetsRoute()
     {
         var route = Route.Create(new Coordinate(10, 10));

@@ -10,7 +10,8 @@ public sealed record DriverRankingItem(
     int InProgressShipmentCount,
     int DistanceMeters,
     int DurationMinutes,
-    decimal FreeCapacityKg);
+    decimal FreeCapacityKg,
+    decimal EstimatedOperationCost);
 
 public sealed record DriverAssignmentSuggestion(
     Guid ShipmentId,
