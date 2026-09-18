@@ -52,6 +52,7 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Secret", TestSecret);
         builder.UseSetting("Seed:AdminEmail", AdminEmail);
         builder.UseSetting("Seed:AdminPassword", AdminPassword);
+        builder.UseSetting("Hangfire:Enabled", "false");
 
         builder.ConfigureTestServices(services =>
         {

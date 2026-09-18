@@ -13,5 +13,8 @@ public interface IShipmentRepository
     Task<IReadOnlyList<PendingShipmentPriorityData>> GetPendingForPriorityAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Shipment>> GetAssignedWithHistoryAsync(
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default);
 }

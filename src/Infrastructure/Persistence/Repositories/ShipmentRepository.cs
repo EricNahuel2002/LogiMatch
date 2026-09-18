@@ -91,6 +91,17 @@ public class ShipmentRepository : IShipmentRepository
             .ToList();
     }
 
+    public async Task<IReadOnlyList<Shipment>> GetAssignedWithHistoryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Shipments
+            .Where(s => s.Order.AssignedDriverId != null)
+            .Include(s => s.Order)
+                .ThenInclude(o => o.AssignedDriver)
+            .Include(s => s.History)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default)
     {
         await _db.Shipments.AddAsync(shipment, cancellationToken);

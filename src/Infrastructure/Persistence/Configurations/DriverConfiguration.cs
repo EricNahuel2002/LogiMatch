@@ -16,6 +16,8 @@ public class DriverConfiguration : IEntityTypeConfiguration<Driver>
 
         builder.Property(d => d.SalaryPerHour).HasColumnType("decimal(18,2)");
 
+        builder.Property(d => d.AverageTimeBetweenOrders);
+
         builder.HasMany(d => d.Vehicles)
             .WithMany(v => v.Drivers);
     }

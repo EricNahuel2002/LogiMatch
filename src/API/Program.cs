@@ -4,7 +4,9 @@ using Api.Authorization;
 using Api.Extensions;
 using Api.Middleware;
 using Application;
+using Application.Services;
 using Domain.Entities;
+using Hangfire;
 using Infrastructure;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -98,6 +100,18 @@ builder.Services.AddOpenApi(options =>
 });
 builder.Services.AddHealthChecks();
 
+var hangfireEnabled = builder.Configuration.GetValue<bool>("Hangfire:Enabled");
+if (hangfireEnabled)
+{
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+    builder.Services.AddHangfireServer();
+}
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("DefaultConnection")
@@ -133,6 +147,19 @@ if (app.Environment.IsDevelopment())
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
+
+if (hangfireEnabled)
+{
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHangfireDashboard("/hangfire");
+    }
+
+    RecurringJob.AddOrUpdate<IDelayRiskService>(
+        "delay-risk-recalculation",
+        service => service.ExecuteRecalculationAsync(CancellationToken.None),
+        Cron.MinuteInterval(10));
+}
 
 app.MapOpenApi();
 app.MapScalarApiReference();

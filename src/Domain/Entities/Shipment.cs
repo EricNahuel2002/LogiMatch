@@ -23,6 +23,8 @@ public class Shipment : BaseEntity
 
     public bool ArrivedAtDestination { get; private set; }
 
+    public decimal? DelayRiskPercentage { get; private set; }
+
     public ICollection<DeliveryAttempt> DeliveryAttempts { get; private set; } = [];
     public ICollection<ShipmentHistory> History { get; private set; } = [];
 
@@ -39,6 +41,18 @@ public class Shipment : BaseEntity
     public void SetPriority(ShipmentPriority priority)
     {
         Priority = priority;
+    }
+
+    public void SetDelayRiskPercentage(decimal? percentage)
+    {
+        if (percentage is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(percentage),
+                "The delay risk percentage must be between 0 and 100.");
+        }
+
+        DelayRiskPercentage = percentage;
     }
 
     public void Start()

@@ -8,5 +8,8 @@ public interface IRouteRepository
 
     Task<Route?> GetActiveByDriverIdAsync(Guid driverId, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Route>> GetActiveRoutesForDelayRiskAsync(
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(Route route, CancellationToken cancellationToken = default);
 }

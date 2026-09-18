@@ -12,7 +12,8 @@ lanzan `InvalidOperationException` (→ 409 en la API).
 - **`Entities/User.cs`** — base abstracta heredada de `IdentityUser<Guid>` (integración Identity);
   jerarquía TPH: `Admin`, `Customer`, `Driver`. `Email`/`PasswordHash`/`UserName` vienen de Identity;
   `Name`/`Surname`/`CreatedAt`/`UpdatedAt` son propios.
-- **`Entities/Driver.cs`** — chofer; `CurrentLocation: Coordinate?` con `SetCurrentLocation(Coordinate)`.
+- **`Entities/Driver.cs`** — chofer; `CurrentLocation: Coordinate?` con `SetCurrentLocation(Coordinate)`
+  y `SalaryPerHour` público (se usa en la calculadora de costos de operación).
 - **`Entities/Order.cs`** — agregado raíz de órdenes. Invariantes: exige ≥1 item, no se modifica
   tras asignarse a un envío. Ventana horaria de entrega opcional (`DeliveryWindowStartAt`/`EndAt`,
   hora local Argentina); si viene un extremo falta el otro o `end <= start` → excepción.
@@ -31,14 +32,24 @@ lanzan `InvalidOperationException` (→ 409 en la API).
   (marca inactiva y guarda `CancellationReason`; falla si ya lo está). Nota: `Route.AddStop` no fija
   `RouteId` a la parada; eso lo hace `RouteStop.AssignToRoute` (invocado por `RouteService.AddStopAsync`).
 - **`Entities/RouteStop.cs`** — parada ligada a un `Shipment` con `RouteId` nullable (puede existir
-  sin ruta asignada); `Create(shipment, coordinate, stopOrder, name)` fija la `Coordinate` destino y
-  `AssignToRoute` fija la navegación.
-- **`Entities/Vehicle.cs`** — vehículo con capacidad y estado activo (`SetActive`).
-- **`Services/DriverScoring.cs`** — regla pura (sin I/O) que rankea candidatos: normaliza 6 métricas
-  (intentos exitosos del día, envíos pendientes, en progreso, distancia, tiempo de llegada y capacidad
-  libre) con pesos y las combina en un score 0..1 para sugerir el mejor conductor. Además provee el
-  filtro previo de **factibilidad** `IsFeasible`/`FilterFeasible` (llegada `now + duración` dentro de
-  la ventana de entrega, inclusiva), independiente del scoring.
+  sin ruta asignada); `Create(shipment, coordinate, stopOrder, name, distanceMeters, tollCost)` fija
+  la `Coordinate` destino y los costos de operación (`DistanceMeters`, `TollCost`, ambos ≥0),
+  `AssignToRoute` fija la navegación. La distancia/peaje alimentan la calculadora de costos.
+- **`Entities/Vehicle.cs`** — vehículo con capacidad, estado activo (`SetActive`) y costos de
+  operación (`FuelConsumption` en L/km, `FuelPrice` en $/L y `MaintenanceCost`, configurados en el
+  factory/`SetOperatingCosts`, todos ≥0). Lleva `KilometersPerDay`, la navegación `Routes` y
+  `RecalculateKilometersPerDay()`, que suma los `DistanceMeters` de los envíos llegados
+  (`ArrivedAtDestination`), convierte a km y los asigna.
+- **`Services/RouteOperationCostCalculator.cs`** — regla pura: costo estimado de operación del día =
+  `SalaryPerHour × entregas exitosas + km × consumo × precio + mantenimiento + peaje`; valida inputs
+  ≥0 vía helper `EnsureNonNegative`.
+- **`Services/DriverScoring.cs`** — regla pura (sin I/O) que rankea candidatos: normaliza **7 métricas**
+  (intentos exitosos del día, envíos pendientes, en progreso, distancia, tiempo de llegada, capacidad
+  libre y **costo estimado de operación**) con pesos y las combina en un score 0..1 para sugerir el
+  mejor conductor; `OperationCostWeight` vale lo mismo que `DistanceWeight` (5m) y el primer
+  desempate es por costo (menor gana). Además provee el filtro previo de **factibilidad**
+  `IsFeasible`/`FilterFeasible` (llegada `now + duración` dentro de la ventana de entrega, inclusiva),
+  independiente del scoring.
 - **`Enums/ShipmentStatus.cs`** — estados: Pending, InProgress, Stopped, Arrived, Finalized,
   DeliveryFailed, Cancelled.
 - **`Enums/RouteCancellationReason.cs`** — motivos de cancelación de ruta: VehicleBreakdown,
@@ -59,7 +70,7 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   - `OrderService` — crear orden (valida cliente y admin), añadir items, asignar driver.
   - `RouteService` — crear ruta, asignar conductor/vehículo, `AddStopAsync`.
   - `RouteStopService` — crear parada por `Address` (la geocodifica con `IGeocodingClient`)
-    validando que el envío exista.
+    validando que el envío exista; registra `DistanceMeters` y `TollCost` del request.
   - `DriverService` — `UpdateLocationAsync`: valida la coordenada, carga el driver y fija su
     `CurrentLocation`. `CancelCurrentRouteAsync`: el driver cancela su ruta activa — hace `Requeue`
     de los envíos no terminales (a `Pending` y sin driver), elimina sus `RouteStop` y desactiva la
@@ -69,11 +80,14 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
     orden vs capacidad libre de cada candidato, distancia y duración por carretera
     (`IRouteClient.GetDrivingMetricsAsync`), **filtro de factibilidad** por ventana horaria de la
     orden (hora actual en Argentina vs llegada estimada) y ranking final con
-    `Domain.Services.DriverScoring`.
+    `Domain.Services.DriverScoring`. Por candidato calcula el **costo estimado de operación**
+    (`RouteOperationCostCalculator` con salario, km del día, consumos del vehículo de su ruta activa
+    y peaje) que entra como peso en el score.
   - Interfaces `I*Service` junto a cada implementación.
 - **`Persistence/`** — contratos (interfaces) de repositorios y `IUnitOfWork`;
   las implementaciones EF están en Infrastructure. `IUserRepository` agrega `GetDriverByIdAsync`,
-  `GetAdminsAsync` y `GetDriverCandidatesAsync` (devuelve `DriverAssignmentCandidate`);
+  `GetAdminsAsync` y `GetDriverCandidatesAsync` (devuelve `DriverAssignmentCandidate` con los datos de
+  operación: salario, km del día, consumos y mantenimiento del vehículo y peaje de la ruta activa);
   `IShipmentRepository` ofrece `GetByIdWithAssignmentDetailsAsync` (Order→Items + RouteStop) para el
   scoring; `IRouteRepository` agrega `GetActiveByDriverIdAsync` (ruta activa del driver con
   Stops→Shipment→Order) y `IRouteStopRepository` agrega `Remove`.
@@ -84,8 +98,9 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   por correo (implementación MailKit en Infrastructure).
 - **`Dtos/`** — modelos de request por agregado (`Orders`, `Shipments`, `Routes`, `RouteStops`,
   `Drivers`, `Auth`); payload esperado por cada endpoint. `Shipments.DriverAssignmentSuggestion`
-  modela la sugerencia (driver recomendado + ranking); `RouteStops.CreateRouteStopRequest` recibe
-  `Address` (se geocodifica) y `Orders.CreateOrderItemRequest` incluye `WeightKg`;
+  modela la sugerencia (driver recomendado + ranking, con `EstimatedOperationCost` en cada item);
+  `RouteStops.CreateRouteStopRequest` recibe `Address` (se geocodifica) + `DistanceMeters`/`TollCost`
+  y `Orders.CreateOrderItemRequest` incluye `WeightKg`;
   `Orders.CreateOrderRequest` acepta `DeliveryWindowStartAt`/`EndAt` opcionales (hora local);
   `Drivers.CancelRouteRequest` lleva `Reason` (`RouteCancellationReason`) y `Note` opcional.
 - **`Validators/`** — FluentValidation `XxxRequestValidator` por request; los servicios llaman
@@ -128,7 +143,9 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
 - **`Persistence/Repositories/`** — implementaciones EF de los contratos de `Application.Persistence`,
   + `UnitOfWork`. Includes clave: Order→Items, Shipment→Order+DeliveryAttempts, Route→RouteStops;
   `UserRepository.GetDriverCandidatesAsync` agrega por driver la capacidad máx. de vehículos activos,
-  entregas exitosas del día, pendientes y en-progreso (con su peso); usuarios vía `OfType<T>()` (TPH).
+  entregas exitosas del día, pendientes y en-progreso (con su peso), el **km del día** (suma de
+  `DistanceMeters` de envíos llegados hoy vía `ShipmentHistory`) y los datos del vehículo/peaje de la
+  ruta activa; usuarios vía `OfType<T>()` (TPH).
 - **`Email/`** — `MailKitEmailSender` (implementa `IEmailSender` vía SMTP) y `EmailOptions`
   (Host/Port/Username/Password/From/FromName/UseSsl).
 - **`Integrations/`** — implementaciones de los clientes externos: `OpenRouteServiceGeocodingClient`
@@ -139,14 +156,19 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   `EmailOptions` (sección `Email`) + `IEmailSender`/`MailKitEmailSender` y HttpClient tipados de ORS
   (geocoding + matrix; `BaseUrl` desde config).
 - **`Persistence/DemoDataSeeder.cs`** — seed demo idempotente (solo Development): admin, customer y
-  5 conductores con ubicación y vehículos; crea la orden objetivo sin driver asignado y otros envíos
-  con estados variados (pendientes, en progreso, entregado) para ejercitar el scoring.
+  5 conductores con ubicación, `SalaryPerHour` y vehículos (con consumos, precio de combustible y
+  mantenimiento); crea la orden objetivo sin driver asignado y otros envíos con estados variados
+  (pendientes, en progreso, entregado) y paradas con `DistanceMeters`/`TollCost` para ejercitar el
+  scoring.
 - **`Migrations/`** — migraciones EF del esquema: `InitialCreate`, `AddDriverScoring`
   (ubicación de conductores + `WeightKg` en items), `AddOrderDeliveryWindow`
   (ventana horaria de entrega en órdenes), `AddRouteCancellation` (desactivación de rutas +
-  `CancellationReason`) y `MakeRouteStopRouteIdNullable` (`RouteId` opcional en paradas).
+  `CancellationReason`), `MakeRouteStopRouteIdNullable` (`RouteId` opcional en paradas) y
+  `AddOperatingCostsAndRouteStopCosts` (`SalaryPerHour` en drivers, costos de vehículo,
+  `DistanceMeters`/`TollCost` en paradas).
 - **Tests** — `src/UnitTests/Domain/` (reglas por entidad, incl. `DriverScoringTests`,
-  `OrderItemTests`, `DriverTests`), `src/UnitTests/Application/` (servicios con Moq y validators,
+  `RouteOperationCostCalculatorTests`, `OrderItemTests`, `DriverTests`),
+  `src/UnitTests/Application/` (servicios con Moq y validators,
   incl. `ShipmentAssignmentServiceTests`, `DriverServiceTests`, `RouteStopServiceTests`),
   `src/UnitTests/Infrastructure/` (clients ORS con `MockHttpMessageHandler`).
   `src/IntegrationTests/` cubre flujos reales contra SQL Server: Auth, `Orders/OrderLifecycleTests`,

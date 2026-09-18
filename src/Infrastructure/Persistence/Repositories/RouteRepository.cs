@@ -30,6 +30,18 @@ public class RouteRepository : IRouteRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Route>> GetActiveRoutesForDelayRiskAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _db.Routes
+            .Where(r => r.IsActive)
+            .Include(r => r.Driver)
+            .Include(r => r.RouteStops)
+                .ThenInclude(rs => rs.Shipment)
+                    .ThenInclude(s => s.Order)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Route route, CancellationToken cancellationToken = default)
     {
         await _db.Routes.AddAsync(route, cancellationToken);
