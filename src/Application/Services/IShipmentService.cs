@@ -4,6 +4,9 @@ namespace Application.Services;
 
 public interface IShipmentService
 {
+    Task<IReadOnlyList<ShipmentDelayRiskResponse>> GetPendingWithDelayRiskAsync(
+        CancellationToken cancellationToken = default);
+
     Task<Guid> CreateAsync(Guid orderId, CancellationToken cancellationToken = default);
 
     Task StartAsync(Guid shipmentId, CancellationToken cancellationToken = default);

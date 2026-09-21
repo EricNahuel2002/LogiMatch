@@ -21,6 +21,15 @@ public sealed class ShipmentsController : ControllerBase
         _shipmentAssignmentService = shipmentAssignmentService;
     }
 
+    [HttpGet("pending")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<IActionResult> GetPendingWithDelayRisk(CancellationToken cancellationToken)
+    {
+        var shipments = await _shipmentService.GetPendingWithDelayRiskAsync(cancellationToken);
+
+        return Ok(shipments);
+    }
+
     [HttpPost]
     [Authorize(Policy = Policies.AdminOnly)]
     public async Task<IActionResult> Create([FromQuery] Guid orderId, CancellationToken cancellationToken)

@@ -13,6 +13,9 @@ public interface IShipmentRepository
     Task<IReadOnlyList<PendingShipmentPriorityData>> GetPendingForPriorityAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Shipment>> GetPendingWithDriverAndRiskAsync(
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Shipment>> GetAssignedWithHistoryAsync(
         CancellationToken cancellationToken = default);
 

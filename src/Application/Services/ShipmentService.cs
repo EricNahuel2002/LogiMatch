@@ -44,6 +44,16 @@ public class ShipmentService : IShipmentService
         _deliveryAttemptValidator = deliveryAttemptValidator;
     }
 
+    public async Task<IReadOnlyList<ShipmentDelayRiskResponse>> GetPendingWithDelayRiskAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var shipments = await _shipments.GetPendingWithDriverAndRiskAsync(cancellationToken);
+
+        return shipments
+            .Select(ToDelayRiskResponse)
+            .ToList();
+    }
+
     public async Task<Guid> CreateAsync(Guid orderId, CancellationToken cancellationToken = default)
     {
         var order = await _orders.GetByIdAsync(orderId, cancellationToken)
@@ -151,5 +161,19 @@ public class ShipmentService : IShipmentService
 
         return await _routeStops.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException(nameof(RouteStop), id);
+    }
+
+    private static ShipmentDelayRiskResponse ToDelayRiskResponse(Shipment shipment)
+    {
+        var driver = shipment.RouteStop?.Route?.Driver ?? shipment.Order.AssignedDriver;
+
+        return new ShipmentDelayRiskResponse(
+            shipment.Id,
+            shipment.Status,
+            shipment.Priority,
+            shipment.DelayRiskPercentage,
+            driver is null
+                ? null
+                : new ShipmentDriverResponse(driver.Id, driver.Name, driver.Surname));
     }
 }

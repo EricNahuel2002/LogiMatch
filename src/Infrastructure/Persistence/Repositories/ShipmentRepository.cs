@@ -91,6 +91,24 @@ public class ShipmentRepository : IShipmentRepository
             .ToList();
     }
 
+    public async Task<IReadOnlyList<Shipment>> GetPendingWithDriverAndRiskAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var shipments = await _db.Shipments
+            .Where(s => s.Status == ShipmentStatus.Pending)
+            .Include(s => s.Order)
+                .ThenInclude(o => o.AssignedDriver)
+            .Include(s => s.RouteStop!)
+                .ThenInclude(rs => rs.Route!)
+                .ThenInclude(r => r.Driver)
+            .ToListAsync(cancellationToken);
+
+        return shipments
+            .OrderByDescending(s => s.Priority)
+            .ThenBy(s => s.CreatedAt)
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<Shipment>> GetAssignedWithHistoryAsync(
         CancellationToken cancellationToken = default)
     {

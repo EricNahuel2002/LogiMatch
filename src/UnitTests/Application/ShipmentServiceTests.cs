@@ -49,6 +49,23 @@ public class ShipmentServiceTests
     }
 
     [Fact]
+    public async Task GetPendingWithDelayRiskAsync_WithoutDriver_MapsNullDriver()
+    {
+        var shipment = BuildPendingShipment();
+        shipment.SetDelayRiskPercentage(5m);
+
+        _shipments.Setup(r => r.GetPendingWithDriverAndRiskAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { shipment });
+
+        var service = CreateService();
+        var result = await service.GetPendingWithDelayRiskAsync();
+
+        var item = Assert.Single(result);
+        Assert.Equal(5m, item.DelayRiskPercentage);
+        Assert.Null(item.Driver);
+    }
+
+    [Fact]
     public async Task CreateAsync_CreatesShipmentForOrderAndSaves()
     {
         var order = Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 1m, 1, 5m)]);
