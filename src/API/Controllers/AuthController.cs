@@ -39,7 +39,13 @@ public sealed class AuthController : ControllerBase
         }
 
         var roles = await _userManager.GetRolesAsync(user);
-        var token = _jwtTokenService.CreateToken(user, roles);
+        var token = _jwtTokenService.CreateToken(new TokenUserDto
+        {
+            Id = user.Id,
+            Name = user.Name,
+            Surname = user.Surname,
+            Email = user.Email ?? string.Empty
+        }, roles);
 
         return Ok(new LoginResponse
         {

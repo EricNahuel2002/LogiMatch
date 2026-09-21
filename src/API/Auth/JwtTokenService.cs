@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Domain.Entities;
+using Application.Dtos.Auth;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -18,7 +18,7 @@ public sealed class JwtTokenService
         _options = options.Value;
     }
 
-    public TokenResult CreateToken(User user, IEnumerable<string> roles)
+    public TokenResult CreateToken(TokenUserDto user, IEnumerable<string> roles)
     {
         var claims = new List<Claim>
         {
