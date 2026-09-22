@@ -54,12 +54,17 @@ public class ShipmentService : IShipmentService
             .ToList();
     }
 
-    public async Task<Guid> CreateAsync(Guid orderId, CancellationToken cancellationToken = default)
+    public async Task<Guid> CreateAsync(Guid orderId, bool urgent = false, CancellationToken cancellationToken = default)
     {
         var order = await _orders.GetByIdAsync(orderId, cancellationToken)
             ?? throw new NotFoundException(nameof(Order), orderId);
 
         var shipment = Shipment.Create(order);
+
+        if (urgent)
+        {
+            shipment.SetUrgent();
+        }
 
         await _shipments.AddAsync(shipment, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

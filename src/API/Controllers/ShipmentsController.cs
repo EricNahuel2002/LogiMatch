@@ -32,9 +32,9 @@ public sealed class ShipmentsController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = Policies.AdminOnly)]
-    public async Task<IActionResult> Create([FromQuery] Guid orderId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create([FromQuery] Guid orderId, [FromQuery] bool urgent = false, CancellationToken cancellationToken = default)
     {
-        var id = await _shipmentService.CreateAsync(orderId, cancellationToken);
+        var id = await _shipmentService.CreateAsync(orderId, urgent, cancellationToken);
 
         return Created($"/api/shipments/{id}", new { id });
     }

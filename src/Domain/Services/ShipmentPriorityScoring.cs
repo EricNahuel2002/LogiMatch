@@ -1,4 +1,4 @@
-using Domain.Enums;
+ using Domain.Enums;
 
 namespace Domain.Services;
 
@@ -11,6 +11,8 @@ public sealed record ShipmentPriorityInput(
     int FinalizedCount);
 
 public sealed record ShipmentPriorityResult(Guid ShipmentId, decimal Score, ShipmentPriority Priority);
+
+public sealed record ShipmentScoreResult(Guid ShipmentId, decimal Score);
 
 public static class ShipmentPriorityScoring
 {
@@ -29,7 +31,7 @@ public static class ShipmentPriorityScoring
     public const decimal NormalThreshold = 0.5m;
     public const decimal HighThreshold = 0.75m;
 
-    public static IReadOnlyList<ShipmentPriorityResult> Assign(
+    public static IReadOnlyList<ShipmentScoreResult> Assign(
         IReadOnlyList<ShipmentPriorityInput> inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);
@@ -88,7 +90,7 @@ public static class ShipmentPriorityScoring
 
                 var score = Clamp(weighted / TotalWeight, 0m, 1m);
 
-                return new ShipmentPriorityResult(i.ShipmentId, score, ToPriority(score));
+                return new ShipmentScoreResult(i.ShipmentId, score);
             })
             .OrderByDescending(r => r.Score)
             .ThenBy(r => r.ShipmentId)
@@ -107,12 +109,7 @@ public static class ShipmentPriorityScoring
             return ShipmentPriority.Normal;
         }
 
-        if (score < HighThreshold)
-        {
-            return ShipmentPriority.High;
-        }
-
-        return ShipmentPriority.Urgent;
+        return ShipmentPriority.High;
     }
 
     public static decimal ClientAbsenceRate(int deliveryFailedCount, int finalizedCount)

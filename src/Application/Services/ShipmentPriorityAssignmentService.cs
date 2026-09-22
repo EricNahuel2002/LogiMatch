@@ -40,10 +40,43 @@ public class ShipmentPriorityAssignmentService : IShipmentPriorityAssignmentServ
                 p.FinalizedCount))
             .ToList();
 
-        var results = ShipmentPriorityScoring.Assign(inputs);
         var shipmentById = pending.ToDictionary(p => p.Shipment.Id, p => p.Shipment);
 
-        foreach (var result in results)
+        var urgentPending = pending
+            .Where(p => p.Shipment.Priority == Domain.Enums.ShipmentPriority.Urgent)
+            .ToList();
+        var nonUrgentPending = pending
+            .Where(p => p.Shipment.Priority != Domain.Enums.ShipmentPriority.Urgent)
+            .ToList();
+
+        var combinedResults = new List<(Guid ShipmentId, Domain.Enums.ShipmentPriority Priority, decimal Score)>();
+
+        if (urgentPending.Count > 0)
+        {
+            var urgentInputs = inputs
+                .Where(i => urgentPending.Any(u => u.Shipment.Id == i.ShipmentId))
+                .ToList();
+            var urgentScores = ShipmentPriorityScoring.Assign(urgentInputs);
+            foreach (var scoreResult in urgentScores)
+            {
+                combinedResults.Add((scoreResult.ShipmentId, Domain.Enums.ShipmentPriority.Urgent, scoreResult.Score));
+            }
+        }
+
+        if (nonUrgentPending.Count > 0)
+        {
+            var nonUrgentInputs = inputs
+                .Where(i => nonUrgentPending.Any(n => n.Shipment.Id == i.ShipmentId))
+                .ToList();
+            var nonUrgentScores = ShipmentPriorityScoring.Assign(nonUrgentInputs);
+            foreach (var scoreResult in nonUrgentScores)
+            {
+                var priority = ShipmentPriorityScoring.ToPriority(scoreResult.Score);
+                combinedResults.Add((scoreResult.ShipmentId, priority, scoreResult.Score));
+            }
+        }
+
+        foreach (var result in combinedResults)
         {
             if (shipmentById.TryGetValue(result.ShipmentId, out var shipment))
             {

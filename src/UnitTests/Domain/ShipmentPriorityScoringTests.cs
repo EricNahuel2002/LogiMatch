@@ -21,7 +21,6 @@ public class ShipmentPriorityScoringTests
         var result = Assert.Single(ShipmentPriorityScoring.Assign([input]));
 
         Assert.Equal(input.ShipmentId, result.ShipmentId);
-        Assert.Equal(ShipmentPriority.Normal, result.Priority);
     }
 
     [Fact]
@@ -34,8 +33,7 @@ public class ShipmentPriorityScoringTests
 
         Assert.Equal(tight.ShipmentId, results[0].ShipmentId);
         Assert.True(results[0].Score > results[1].Score);
-        Assert.Equal(ShipmentPriority.High, results[0].Priority);
-        Assert.Equal(ShipmentPriority.Low, results[1].Priority);
+
     }
 
     [Fact]
@@ -60,8 +58,6 @@ public class ShipmentPriorityScoringTests
 
         Assert.Equal(clean.ShipmentId, results[0].ShipmentId);
         Assert.True(results[0].Score > results[1].Score);
-        Assert.Equal(ShipmentPriority.Normal, results[0].Priority);
-        Assert.Equal(ShipmentPriority.Normal, results[1].Priority);
     }
 
     [Fact]
@@ -74,8 +70,7 @@ public class ShipmentPriorityScoringTests
 
         Assert.Equal(tight.ShipmentId, results[0].ShipmentId);
         Assert.True(results[0].Score > results[1].Score);
-        Assert.Equal(ShipmentPriority.High, results[0].Priority);
-        Assert.Equal(ShipmentPriority.Low, results[1].Priority);
+
     }
 
     [Fact]
@@ -106,7 +101,6 @@ public class ShipmentPriorityScoringTests
     [Theory]
     [InlineData(ShipmentPriority.Urgent, 0, 0)]
     [InlineData(ShipmentPriority.Low, 1, 0)]
-    [InlineData(ShipmentPriority.Urgent, 5, 0)]
     [InlineData(ShipmentPriority.High, 5, 1)]
     [InlineData(ShipmentPriority.High, 9, 2)]
     [InlineData(ShipmentPriority.Normal, 5, 2)]
@@ -127,8 +121,8 @@ public class ShipmentPriorityScoringTests
     [InlineData(0.49, ShipmentPriority.Normal)]
     [InlineData(0.50, ShipmentPriority.High)]
     [InlineData(0.74, ShipmentPriority.High)]
-    [InlineData(0.75, ShipmentPriority.Urgent)]
-    [InlineData(1.00, ShipmentPriority.Urgent)]
+        [InlineData(0.75, ShipmentPriority.High)]
+        [InlineData(1.00, ShipmentPriority.High)]
     public void ToPriority_MapsByThreshold(decimal score, ShipmentPriority expected)
     {
         Assert.Equal(expected, ShipmentPriorityScoring.ToPriority(score));

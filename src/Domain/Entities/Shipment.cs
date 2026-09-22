@@ -43,6 +43,11 @@ public class Shipment : BaseEntity
         Priority = priority;
     }
 
+    public void SetUrgent()
+    {
+        Priority = ShipmentPriority.Urgent;
+    }
+
     public void SetDelayRiskPercentage(decimal? percentage)
     {
         if (percentage is < 0 or > 100)
