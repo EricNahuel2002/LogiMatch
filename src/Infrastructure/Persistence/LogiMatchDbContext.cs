@@ -21,6 +21,7 @@ public class LogiMatchDbContext : IdentityDbContext<User, IdentityRole<Guid>, Gu
     public DbSet<Route> Routes => Set<Route>();
     public DbSet<RouteStop> RouteStops => Set<RouteStop>();
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<Deposit> Deposits => Set<Deposit>();
 
     public override int SaveChanges()
     {

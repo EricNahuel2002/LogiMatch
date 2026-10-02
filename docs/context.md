@@ -52,6 +52,14 @@ lanzan `InvalidOperationException` (→ 409 en la API).
   independiente del scoring.
 - **`Enums/ShipmentStatus.cs`** — estados: Pending, InProgress, Stopped, Arrived, Finalized,
   DeliveryFailed, Cancelled.
+- **`Enums/ShipmentPriority.cs`** — Low, Normal, High, Urgent. `Shipment.SetPriority` la fija y
+  `Shipment.SetUrgent()` fuerza `Urgent`. El planificador la convierte en factor multiplicativo
+  del costo de arco (menor factor = más prioritario), no en un peso de solución.
+- **`Entities/Deposit.cs`** — punto de retorno de las rutas: `Create(address, coordinate)` valida
+  `Address` no vacío (máx 200) y latitud/longitud en rango. `Active` (default `true`, índice) y
+  `SetActive(bool)` marcan si el depósito admite rutas; la planificación solo elige depósitos
+  activos. Entidad de solo lectura para la planificación; no tiene rutas ni paradas propias, las
+  rutas terminan en su coordenada.
 - **`Enums/RouteCancellationReason.cs`** — motivos de cancelación de ruta: VehicleBreakdown,
   RouteAbandonment, Emergency, InclementWeather, Accident.
 - **`ValueObjects/Coordinate.cs`** — record `(Latitude, Longitude)`.
@@ -83,17 +91,61 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
     `Domain.Services.DriverScoring`. Por candidato calcula el **costo estimado de operación**
     (`RouteOperationCostCalculator` con salario, km del día, consumos del vehículo de su ruta activa
     y peaje) que entra como peso en el score.
+  - `RoutePlanningService` — **`POST /api/route-planning/preview`: propuesta read-only, no persiste
+    nada.** Valida el request y carga en consultas batch (drivers, vehicles, catálogo de depósitos y
+    **todos los envíos `Pending`**, una por tipo de recurso) sin N+1, arma el
+    `VehicleRoutingProblem`, pide la matriz NxN a `IRouteMatrixClient` y lo resuelve con
+    `IVehicleRoutingSolver`. Semántica: la administración elige `DriverId → VehicleId` y el depósito
+    es **opcional** (ver `IDepositAssignmentPolicy`); el solver solo decide a qué vehículo va cada
+    envío y en qué orden. El request **no lleva envíos**: se planifican todos los `Pending`, y los que
+    no se pueden enrutar (sin coordenada geocodificada, fuera del horizonte o sin ventana feasible)
+    se devuelven en `ExcludedShipments` en lugar de fallar; si no queda ninguno, 409. Horizonte de
+    12 h **desde la hora local Argentina actual** (vía `TimeProvider`), ventanas de entrega de la
+    orden convertidas a segundos relativos y clampeadas al horizonte. Antes de solver rechaza con
+    `InvalidOperationException` (→ 409) recurso inexistente, envío no `Pending`, vehículo inactivo,
+    **depósito inactivo**, conductor sin `CurrentLocation`, catálogo sin depósitos activos y matriz
+    incompleta; los mensajes incluyen los IDs afectados. Que el solver no encuentre solución (p. ej.
+    ningún vehículo tiene capacidad para todo el peso) también es 409.
+    **No usa `IUnitOfWork`**: leer y devolver la propuesta es toda la operación.
   - Interfaces `I*Service` junto a cada implementación.
+- **`RoutePlanning/`** — contratos de optimización, sin dependencias de EF ni ORS:
+  - `VehicleRoutingProblem` + `PlanningDriverData`/`PlanningShipmentData`/`PlanningVehicleData` —
+    problema de CVRPTW. Guarda el **layout de nodos** (índices de driver, envío y depósito) con sus
+    lookups, de modo que el solver no necesita volver a resolver nombres a índices. Valida que toda
+    ventana quepa en el horizonte con `EnsureWindowsFitHorizon` antes de llamar a OR-Tools (si no, la
+    librería aborta con `ApplicationException: fail`).
+  - `RouteMatrix` — matriz densa NxN de `long` con `UnreachableValue` para celdas sin dato y
+    `HasCompleteData`; constructor y acceso validan rango e índice. `TimeWindow` — par
+    start/end en **segundos** relativos al inicio del horizonte.
+  - `IVehicleRoutingSolver`/`VehicleRoutingSolution` — frontera del solver: recibe el problema y la
+    matriz, devuelve arcos planificados por ruta o `null` si no hay solución factible. La solución
+    distingue `TotalDistanceMeters`/`TotalDurationMinutes` (reales, sin weighting) de los
+    costos de arco ponderados por prioridad.
+  - `IDepositAssignmentPolicy`/`NearestDepositAssignmentPolicy` + `DepositAssignment` — el depósito
+    es **opcional en el request**: si viene, se respeta como override (el servicio ya valida que
+    exista y esté activo); si viene `null`, la política elige el **depósito activo geodésicamente más
+    cercano** al conductor por Haversine, con desempate por `Guid` para que el layout sea
+    determinista. No usa `IRouteMatrixClient` (no hace falta una llamada extra a ORS) y solo recibe
+    depósitos ya filtrados por `Active`; si no hay ninguno lanza `InvalidOperationException`.
+    Registrada como **singleton** en `DependencyInjection.cs`.
 - **`Persistence/`** — contratos (interfaces) de repositorios y `IUnitOfWork`;
   las implementaciones EF están en Infrastructure. `IUserRepository` agrega `GetDriverByIdAsync`,
   `GetAdminsAsync` y `GetDriverCandidatesAsync` (devuelve `DriverAssignmentCandidate` con los datos de
   operación: salario, km del día, consumos y mantenimiento del vehículo y peaje de la ruta activa);
   `IShipmentRepository` ofrece `GetByIdWithAssignmentDetailsAsync` (Order→Items + RouteStop) para el
-  scoring; `IRouteRepository` agrega `GetActiveByDriverIdAsync` (ruta activa del driver con
-  Stops→Shipment→Order) y `IRouteStopRepository` agrega `Remove`.
+  scoring y `GetPendingWithPlanningDetailsAsync` (proyección a `ShipmentPlanningData`: estado,
+  prioridad, peso total de la orden, coordenada destino y ventana de entrega; filtra `Pending` y
+  ordena de forma determinista) para la planificación;
+  `IUserRepository` agrega `GetDriversByIdsAsync`, `IVehicleRepository` `GetManyByIdsAsync` e
+  `IDepositRepository` **`GetAllAsync`** (catálogo completo, que el servicio filtra por `Active`;
+  antes se cargaban solo los depósitos referenciados), todos
+  batch para no repetir consultas por recurso; `IRouteRepository` agrega `GetActiveByDriverIdAsync`
+  (ruta activa del driver con Stops→Shipment→Order) y `IRouteStopRepository` agrega `Remove`.
 - **`Integrations/`** — contratos de servicios externos: `IGeocodingClient.GeocodeAsync(address)`
-  (dirección → `Coordinate`) e `IRouteClient.GetDrivingMetricsAsync(origins, destination)`
-  (distancia en metros y duración en minutos por driver, redondeada hacia arriba);
+  (dirección → `Coordinate`), `IRouteClient.GetDrivingMetricsAsync(origins, destination)`
+  (distancia en metros y duración en minutos por driver, redondeada hacia arriba) e
+  **`IRouteMatrixClient.GetMatrixAsync(locations)`** (matriz NxN completa de distancias en metros y
+  duraciones en segundos entre todos los nodos de planificación, con bandera de datos completos);
   implementaciones ORS en Infrastructure. `IEmailSender.SendAsync(recipients, subject, body)` notifica
   por correo (implementación MailKit en Infrastructure).
 - **`Dtos/`** — modelos de request por agregado (`Orders`, `Shipments`, `Routes`, `RouteStops`,
@@ -103,8 +155,17 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   y `Orders.CreateOrderItemRequest` incluye `WeightKg`;
   `Orders.CreateOrderRequest` acepta `DeliveryWindowStartAt`/`EndAt` opcionales (hora local);
   `Drivers.CancelRouteRequest` lleva `Reason` (`RouteCancellationReason`) y `Note` opcional.
+  **`RoutePlanning/`**: `PlanRoutesRequest` lleva **solo** `DriverSelections`
+  (`DriverSelectionRequest` con `DriverId`+`VehicleId` y `DepositId` **nullable**: si se omite, el
+  planificador elige el más cercano; si se repite depósito entre rutas se deduplica el nodo);
+  `RoutePlanningProposalResponse` devuelve totales, conteos y por ruta driver/vehículo/depósito, carga
+  en kg y paradas (`ShipmentId` + `StopOrder`), más `ExcludedShipments` (los `Pending` que no se
+  pudieron enrutar, con su motivo) y el `DepositId` realmente asignado por ruta.
 - **`Validators/`** — FluentValidation `XxxRequestValidator` por request; los servicios llaman
   `ValidateAndThrowAsync` (no son decorativos). `Common/NoteValidation.cs` centraliza notas.
+  `PlanRoutesRequestValidator` exige al menos una selección y drivers/vehículos no vacíos y sin
+  **duplicados**; `DepositId` acepta `null` (elección automática) pero rechaza `Guid.Empty`
+  (los depósitos sí se pueden compartir entre rutas).
 - **`Exceptions/NotFoundException.cs`** — entidad no encontrada (→ 404 en la API).
 - **`DependencyInjection.cs`** — `AddApplication()` registra servicios + validators (escaneo de ensamblado).
 
@@ -122,6 +183,9 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   - `DriversController` — `PATCH /api/drivers/me/location` y `POST /api/drivers/me/routes/cancel`,
     ambas `DriverOnly`; el id del driver se toma del claim del token.
   - `AuthController` — `POST /api/auth/login` (anónimo) → 200 token / 400 validación / 401 credenciales.
+  - `RoutePlanningController` — `POST /api/route-planning/preview`, política `AdminOnly`; devuelve
+    200 con la propuesta, 400 validación, 409 conflicto de planificación. No expone endpoints CRUD de
+    depósitos todavía.
 - **`Auth/`** — `JwtOptions` (Issuer/Audience/Secret/Expiry), `JwtTokenService` (firma HMAC-SHA256 con
   claims sub, name, email, jti y roles), `LoginResponse`.
 - **`Authorization/Policies.cs`** — nombres de policies `AdminOnly`/`DriverOnly`.
@@ -149,15 +213,36 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
 - **`Email/`** — `MailKitEmailSender` (implementa `IEmailSender` vía SMTP) y `EmailOptions`
   (Host/Port/Username/Password/From/FromName/UseSsl).
 - **`Integrations/`** — implementaciones de los clientes externos: `OpenRouteServiceGeocodingClient`
-  (`GET geocode/search`, país desde config) y `OpenRouteServiceMatrixClient`
+  (`GET geocode/search`, país desde config), `OpenRouteServiceMatrixClient`
   (`POST v2/matrix/driving-car`, chunks de ≤69 orígenes, distancias en metros y duraciones en
-  minutos —redondeadas hacia arriba— extraídas de `distances` y `durations`).
+  minutos —redondeadas hacia arriba— extraídas de `distances` y `durations`) y, para la
+  planificación, `OpenRouteServiceMatrixGateway` (transporte compartido:Auth, `BaseUrl` y lectura de
+  la respuesta de bloque) + **`OpenRouteServiceFullMatrixClient`** (`IRouteMatrixClient`). Este
+  último pide la matriz NxN en bloques de ≤50 locations (2500 celdas, bajo el límite de 3500 pares de
+  ORS), recorre **solo el triángulo superior** de bloques y completa el inferior por transposición
+  (válido porque distancia y duración son simétricas en los perfiles de conducción usados); son
+  `blocks * (blocks + 1) / 2` requests, nunca uno por par. Ante celdas nulas escribe
+  `RouteMatrix.UnreachableValue` y marca la matriz como incompleta en vez de fallar, para que el
+  servicio pueda distinguir "sin datos" de "error de ORS".
+- **`RoutePlanning/OrToolsVehicleRoutingSolver.cs`** — `IVehicleRoutingSolver` con Google OR-Tools.
+  Monta un `RoutingModel` con **un vehículo por nodo** (cada driver es un vehículo independiente) y
+  arrays `starts`/`ends` en `RoutingIndexManager`, así el depósito de cada ruta queda fijo como fin de
+  arco. Costo de arco con `RegisterTransitMatrix` sobre la distancia ponderada; capacidad con
+  `AddDimensionWithVehicleCapacity` en **gramas** (evita truncar pesos fraccionarios) y tiempo con
+  `AddDimension` sobre las duraciones, con el cumul de inicio minimizado y rango `[0, horizonte]`.
+  Timeout 10 s. El costo de arco es distancia × factor de prioridad del **nodo destino**
+  (Urgent 0.5, High 0.75, Normal 1.0, Low 1.5) para que el orden priorice sin falsear los totales
+  reportados; **todos los nodos no terminales son obligatorios** (no se agregan disjunctions, que
+  permitirían descartar envíos). Devuelve `null` si OR-Tools no encuentra solución factible dentro
+  del timeout.
 - **`DependencyInjection.cs`** — `AddInfrastructure(connectionString)`: DbContext, repos, UoW,
   `EmailOptions` (sección `Email`) + `IEmailSender`/`MailKitEmailSender` y HttpClient tipados de ORS
-  (geocoding + matrix; `BaseUrl` desde config).
+  (geocoding + matrix; `BaseUrl` desde config), más `IRouteMatrixClient` →
+  `OpenRouteServiceFullMatrixClient` y `IVehicleRoutingSolver` → `OrToolsVehicleRoutingSolver`.
 - **`Persistence/DemoDataSeeder.cs`** — seed demo idempotente (solo Development): admin, customer y
   5 conductores con ubicación, `SalaryPerHour` y vehículos (con consumos, precio de combustible y
-  mantenimiento); crea la orden objetivo sin driver asignado y otros envíos con estados variados
+  mantenimiento), depósitos (`CentralDepositId`/`SouthDepositId`, activos); crea la orden objetivo
+  sin driver asignado y otros envíos con estados variados
   (pendientes, en progreso, entregado) y paradas con `DistanceMeters`/`TollCost` para ejercitar el
   scoring.
 - **`Migrations/`** — migraciones EF del esquema: `InitialCreate`, `AddDriverScoring`
@@ -165,16 +250,26 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   (ventana horaria de entrega en órdenes), `AddRouteCancellation` (desactivación de rutas +
   `CancellationReason`), `MakeRouteStopRouteIdNullable` (`RouteId` opcional en paradas) y
   `AddOperatingCostsAndRouteStopCosts` (`SalaryPerHour` en drivers, costos de vehículo,
-  `DistanceMeters`/`TollCost` en paradas).
+  `DistanceMeters`/`TollCost` en paradas) y `AddDeposits` (tabla `Deposits` con `Name` +
+  `Coordinate`) y **`AddDepositActive`** (columna `Active` con default `true` + índice, para poder
+  retirar un depósito de la planificación sin borrarlo).
 - **Tests** — `src/UnitTests/Domain/` (reglas por entidad, incl. `DriverScoringTests`,
   `RouteOperationCostCalculatorTests`, `OrderItemTests`, `DriverTests`),
   `src/UnitTests/Application/` (servicios con Moq y validators,
-  incl. `ShipmentAssignmentServiceTests`, `DriverServiceTests`, `RouteStopServiceTests`),
-  `src/UnitTests/Infrastructure/` (clients ORS con `MockHttpMessageHandler`).
+  incl. `ShipmentAssignmentServiceTests`, `DriverServiceTests`, `RouteStopServiceTests`,
+  `RoutePlanningServiceTests`, `NearestDepositAssignmentPolicyTests`, `PlanRoutesRequestValidatorTests`),
+  `src/UnitTests/Infrastructure/` (clients ORS con `MockHttpMessageHandler`, incl.
+  `OpenRouteServiceFullMatrixClientTests` y `OrToolsVehicleRoutingSolverTests`, este último con
+  scenarios parametrizados que dimensionan las matrices según el número de nodos).
   `src/IntegrationTests/` cubre flujos reales contra SQL Server: Auth, `Orders/OrderLifecycleTests`,
   `Routes/RouteLifecycleTests`, `RouteStops/CreateRouteStopTests`, `Shipments/`
   (`ShipmentLifecycleTests`, `DriverSuggestionTests`), `Drivers/` (`UpdateLocationTests`,
-  `CancelRouteTests`) y `Email/MailKitEmailSenderTests` (con `Smtp/FakeSmtpServer`). Infra:
+  `CancelRouteTests`), `RoutePlanning/RoutePlanningPreviewTests` (propuesta happy path + que no
+  persiste, asignación de todos los envíos, 409 por recurso/envío/matriz, depósito inactivo,
+  elección automática del más cercano e ignorado de inactivos, 400, 401 y 403) y
+  `Email/MailKitEmailSenderTests` (con `Smtp/FakeSmtpServer`). Infra:
   `ApiWebApplicationFactory` (WebApplicationFactory<Program>, base por suite reemplazando
-  `IGeocodingClient`/`IRouteClient`/`IEmailSender` por doubles `Recording*`), `TestDatabaseFixture`
-  (collection fixture) y `TestDataBuilder`.
+  `IGeocodingClient`/`IRouteClient`/`IRouteMatrixClient`/`IEmailSender` por doubles `Recording*`;
+  fija `Seed:AdminEmail`/`Seed:AdminPassword` y **`Seed:Password`** —este último es el que hace que
+  los usuarios demo acepten `UsersPassword`—, `TestDataBuilder` y `TestDatabaseFixture`
+  (collection fixture)).

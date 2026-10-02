@@ -10,6 +10,14 @@ public interface IUserRepository
 
     Task<Driver?> GetDriverByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Loads the given drivers in a single query. Drivers that do not exist are simply absent
+    /// from the result, so the caller can report them.
+    /// </summary>
+    Task<IReadOnlyList<Driver>> GetDriversByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Admin>> GetAdminsAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DriverAssignmentCandidate>> GetDriverCandidatesAsync(

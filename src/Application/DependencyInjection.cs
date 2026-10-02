@@ -1,3 +1,4 @@
+using Application.RoutePlanning;
 using Application.Services;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,10 @@ public static class DependencyInjection
         services.AddScoped<IRouteStopService, RouteStopService>();
         services.AddScoped<IDriverService, DriverService>();
         services.AddScoped<IDelayRiskService, DelayRiskService>();
+        services.AddScoped<IRoutePlanningService, RoutePlanningService>();
+
+        services.AddSingleton<IDepositAssignmentPolicy, NearestDepositAssignmentPolicy>();
+        services.AddSingleton(TimeProvider.System);
 
         services.AddValidatorsFromAssembly(assembly);
 

@@ -30,6 +30,19 @@ public class UserRepository : IUserRepository
         return _db.Users.OfType<Driver>().FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Driver>> GetDriversByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        return await _db.Users
+            .OfType<Driver>()
+            .AsNoTracking()
+            .Where(u => ids.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Admin>> GetAdminsAsync(CancellationToken cancellationToken = default)
     {
         return await _db.Users.OfType<Admin>()

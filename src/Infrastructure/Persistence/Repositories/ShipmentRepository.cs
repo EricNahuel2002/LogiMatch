@@ -1,6 +1,7 @@
 using Application.Persistence;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence.Repositories;
@@ -118,6 +119,42 @@ public class ShipmentRepository : IShipmentRepository
                 .ThenInclude(o => o.AssignedDriver)
             .Include(s => s.History)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ShipmentPlanningData>> GetPendingWithPlanningDetailsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        // The delivery coordinate lives on the owned RouteStop, so it is projected as two
+        // nullable decimals and rebuilt in memory: a shipment without a route stop has to come
+        // back as a null destination instead of collapsing to the (0,0) default.
+        var rows = await _db.Shipments
+            .AsNoTracking()
+            .Where(s => s.Status == ShipmentStatus.Pending)
+            .OrderByDescending(s => s.Priority)
+            .ThenBy(s => s.CreatedAt)
+            .Select(s => new
+            {
+                s.Id,
+                s.Priority,
+                WeightKg = s.Order.Items.Sum(i => i.WeightKg * i.Quantity),
+                Latitude = (decimal?)s.RouteStop!.Coordinate.Latitude,
+                Longitude = (decimal?)s.RouteStop!.Coordinate.Longitude,
+                s.Order.DeliveryWindowStartAt,
+                s.Order.DeliveryWindowEndAt
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(r => new ShipmentPlanningData(
+                r.Id,
+                r.Priority,
+                r.WeightKg,
+                r.Latitude.HasValue && r.Longitude.HasValue
+                    ? new Coordinate(r.Latitude.Value, r.Longitude.Value)
+                    : null,
+                r.DeliveryWindowStartAt,
+                r.DeliveryWindowEndAt))
+            .ToList();
     }
 
     public async Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default)

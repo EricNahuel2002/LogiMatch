@@ -17,4 +17,16 @@ public class VehicleRepository : IVehicleRepository
     {
         return _db.Vehicles.FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<Vehicle>> GetManyByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        return await _db.Vehicles
+            .AsNoTracking()
+            .Where(v => ids.Contains(v.Id))
+            .ToListAsync(cancellationToken);
+    }
 }

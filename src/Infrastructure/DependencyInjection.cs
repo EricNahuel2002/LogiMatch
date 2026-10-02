@@ -1,9 +1,11 @@
 using Application.Integrations;
 using Application.Persistence;
+using Application.RoutePlanning;
 using Infrastructure.Email;
 using Infrastructure.Integrations;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
+using Infrastructure.RoutePlanning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<IRouteStopRepository, RouteStopRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IVehicleRepository, VehicleRepository>();
+        services.AddScoped<IDepositRepository, DepositRepository>();
 
         services.AddOptions<EmailOptions>()
             .Configure<IConfiguration>((options, configuration) =>
@@ -43,6 +46,15 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(
                 configuration["OpenRouteService:BaseUrl"] ?? "https://api.heigit.org/openrouteservice/");
         });
+
+        services.AddHttpClient<IRouteMatrixClient, OpenRouteServiceFullMatrixClient>((sp, client) =>
+        {
+            var configuration = sp.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(
+                configuration["OpenRouteService:BaseUrl"] ?? "https://api.heigit.org/openrouteservice/");
+        });
+
+        services.AddSingleton<IVehicleRoutingSolver, OrToolsVehicleRoutingSolver>();
 
         return services;
     }

@@ -8,7 +8,7 @@ namespace Infrastructure.Persistence;
 
 public static class DemoDataSeeder
 {
-    public const string DefaultPassword = "LogiMatch#2026";
+    public const string DefaultPassword = "Admin123456@";
 
     private const string TargetShipmentItemName = "Caja de repuestos";
 
@@ -16,6 +16,21 @@ public static class DemoDataSeeder
         TimeZoneInfo.FindSystemTimeZoneById("America/Argentina/Buenos_Aires");
 
     private static readonly Coordinate DepotOrigin = new(-34.6082m, -58.3784m);
+
+    private static readonly DemoDeposit[] DemoDeposits =
+    [
+        new(new Guid("c0de0000-0000-4000-8000-000000000001"), "Depósito central (Retiro)", DepotOrigin),
+        new(new Guid("c0de0000-0000-4000-8000-000000000002"), "Depósito sur (Avellaneda)", new Coordinate(-34.6720m, -58.4400m))
+    ];
+
+    /// <summary>
+    /// Fixed deposit ids, so a route planning preview can be written by hand against the demo
+    /// database without querying it first. They are not generated: the planner request needs a
+    /// deposit id and there is no deposit endpoint to look one up with.
+    /// </summary>
+    public static Guid CentralDepositId => DemoDeposits[0].Id;
+
+    public static Guid SouthDepositId => DemoDeposits[1].Id;
 
     private static readonly string[] CustomerEmails = ["cliente@logimatch.com"];
     private static readonly string[] DriverEmails =
@@ -272,9 +287,37 @@ var (targetShipment, _, targetRoute) = BuildShipment(
             db.Shipments.AddRange(shipments);
         }
 
+        var newDeposits = await EnsureDepositsAsync(db, cancellationToken);
+
         db.Vehicles.AddRange(newVehicles);
+        db.Deposits.AddRange(newDeposits);
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the demo deposits that are missing, keyed by their fixed id so re-running the seeder
+    /// is a no-op.
+    /// </summary>
+    private static async Task<IReadOnlyCollection<Deposit>> EnsureDepositsAsync(
+        LogiMatchDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var existingIds = await db.Deposits
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        var missing = DemoDeposits
+            .Where(demo => !existingIds.Contains(demo.Id))
+            .Select(demo =>
+            {
+                var deposit = Deposit.Create(demo.Address, demo.Coordinate);
+                deposit.Id = demo.Id;
+                return deposit;
+            })
+            .ToList();
+
+        return missing;
     }
 
     private static (Shipment Shipment, RouteStop RouteStop, Route Route) BuildShipment(
@@ -387,4 +430,6 @@ var (targetShipment, _, targetRoute) = BuildShipment(
     {
         return string.Join("; ", errors.Select(e => e.Description));
     }
+
+    private sealed record DemoDeposit(Guid Id, string Address, Coordinate Coordinate);
 }

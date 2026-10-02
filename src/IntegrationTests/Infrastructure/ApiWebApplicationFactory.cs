@@ -24,6 +24,7 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
     public RecordingEmailSender EmailRecorder { get; } = new();
     public RecordingGeocodingClient Geocoding { get; } = new();
     public RecordingRouteClient RouteMetrics { get; } = new();
+    public RecordingRouteMatrixClient RouteMatrix { get; } = new();
 
     public string DatabaseName { get; } = $"LogiMatchDB_IntTests_{Guid.NewGuid():N}";
 
@@ -52,6 +53,7 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Secret", TestSecret);
         builder.UseSetting("Seed:AdminEmail", AdminEmail);
         builder.UseSetting("Seed:AdminPassword", AdminPassword);
+        builder.UseSetting("Seed:Password", UsersPassword);
         builder.UseSetting("Hangfire:Enabled", "false");
 
         builder.ConfigureTestServices(services =>
@@ -59,6 +61,7 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
             services.AddSingleton<IEmailSender>(EmailRecorder);
             services.AddSingleton<IGeocodingClient>(Geocoding);
             services.AddSingleton<IRouteClient>(RouteMetrics);
+            services.AddSingleton<IRouteMatrixClient>(RouteMatrix);
         });
     }
 
