@@ -1,7 +1,7 @@
 using Application.RoutePlanning;
-using Domain.Enums;
 using Google.OrTools.ConstraintSolver;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.RoutePlanning;
 
@@ -26,20 +26,22 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
     /// </summary>
     private const decimal GramsPerKilogram = 1000m;
 
-
     /// <summary>
-    /// Cost multiplier applied when a route enters a shipment node. Lower makes the solver
-    /// prefer serving that shipment earlier. Applies to the arc cost only: it never relaxes
-    /// capacity or time windows.
+    /// Arc cost multiplier for a node of urgency 0. The solver scales an arc into a shipment
+    /// node by <c>BasePriorityFactor - urgency</c>, which reproduces the multipliers the
+    /// priority switch used to apply: a Low shipment costs 1.5 times the distance to reach it,
+    /// an Urgent one half.
     /// </summary>
-    private static decimal CostFactorFor(ShipmentPriority priority) => priority switch
+    private const decimal BasePriorityFactor = 1.5m;
+
+    private readonly DriverScoringOptions _options;
+
+    public OrToolsVehicleRoutingSolver(IOptions<DriverScoringOptions> options)
     {
-        ShipmentPriority.Urgent => 0.5m,
-        ShipmentPriority.High => 0.75m,
-        ShipmentPriority.Normal => 1.0m,
-        ShipmentPriority.Low => 1.5m,
-        _ => 1.0m
-    };
+        ArgumentNullException.ThrowIfNull(options);
+
+        _options = options.Value;
+    }
 
     public VehicleRoutingSolution? Solve(
         VehicleRoutingProblem problem,
@@ -55,8 +57,7 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
         using var manager = BuildIndexManager(problem);
         using var model = new RoutingModel(manager);
 
-        model.SetArcCostEvaluatorOfAllVehicles(
-            model.RegisterTransitMatrix(BuildPriorityWeightedCost(problem)));
+        AddArcCosts(problem, model);
 
         AddCapacityDimension(problem, model);
         AddTimeDimension(problem, model, manager);
@@ -86,10 +87,39 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
     }
 
     /// <summary>
-    /// Distance matrix scaled by the priority of the destination node. Entering a driver
-    /// start or a deposit keeps factor 1, so only shipment sequencing is affected.
+    /// Registers one cost matrix per driver.
     /// </summary>
-    private static long[][] BuildPriorityWeightedCost(VehicleRoutingProblem problem)
+    /// <remarks>
+    /// OR-Tools has no per-vehicle parameter on a single matrix, and the score is per driver, so
+    /// each driver gets its own matrix: distance to a shipment node scaled by its urgency and by
+    /// the urgency weighted driver mismatch penalty. Drivers with the same score produce the
+    /// same matrix, which OR-Tools collapses into a single cost class.
+    /// </remarks>
+    /// <remarks>
+    /// Both terms are preferences, not constraints. The solver is free to serve an urgent
+    /// shipment with a worse driver when the distance makes it the better plan overall, and
+    /// nothing here relaxes capacity or time windows.
+    /// </remarks>
+    private void AddArcCosts(VehicleRoutingProblem problem, RoutingModel model)
+    {
+        for (var driver = 0; driver < problem.DriverCount; driver++)
+        {
+            var score = problem.Drivers[driver].Score;
+            var evaluator = model.RegisterTransitMatrix(BuildCostForDriver(problem, score));
+
+            // Argument order is cost first, then vehicle, unlike SetArcCostEvaluatorOfVehicle.
+            model.SetFixedCostOfVehicle(FixedCostFor(score), driver);
+            model.SetArcCostEvaluatorOfVehicle(evaluator, driver);
+        }
+    }
+
+    /// <summary>
+    /// Distance matrix scaled by the urgency of the destination node, plus the penalty for
+    /// serving a shipment with a driver whose score is below the best possible. Entering a
+    /// driver start or a deposit keeps factor 1 and no penalty, so only shipment sequencing and
+    /// pairing are affected.
+    /// </summary>
+    private long[][] BuildCostForDriver(VehicleRoutingProblem problem, decimal score)
     {
         var size = problem.NodeCount;
         var shipmentOffset = problem.ShipmentNodeOffset;
@@ -97,12 +127,16 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
         var distance = problem.DistanceMatrix;
 
         var factors = new decimal[size];
+        var penalties = new decimal[size];
         Array.Fill(factors, 1m);
 
         for (var shipment = 0; shipment < shipmentCount; shipment++)
         {
-            factors[shipmentOffset + shipment] =
-                CostFactorFor(problem.Shipments[shipment].Priority);
+            var node = shipmentOffset + shipment;
+            var urgency = problem.Shipments[shipment].Urgency;
+
+            factors[node] = BasePriorityFactor - urgency;
+            penalties[node] = _options.MismatchPenaltyMeters * urgency * (1m - score);
         }
 
         var cost = new long[size][];
@@ -114,14 +148,25 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
             for (var to = 0; to < size; to++)
             {
                 var meters = distance[from, to];
+
+                // An unreachable cell stays exactly as it is. Inflating it by the penalty
+                // would still keep it out of reach, but the gap is what makes a summed route
+                // cost safe from overflowing, and that guarantee is not worth the risk.
                 cost[from][to] = meters >= RouteMatrix.UnreachableValue
                     ? RouteMatrix.UnreachableValue
-                    : ScaleCost(meters, factors[to]);
+                    : ScaleCost(meters, factors[to]) + ToCost(penalties[to]);
             }
         }
 
         return cost;
     }
+
+    /// <summary>
+    /// Charge for using a driver at all, in meters of detour, scaled down by their score.
+    /// Concentrates work on the best drivers instead of spreading it over many mediocre ones.
+    /// </summary>
+    private long FixedCostFor(decimal score) =>
+        ToCost(_options.FixedCostMeters * (1m - score));
 
     private static long ScaleCost(long meters, decimal factor)
     {
@@ -130,7 +175,21 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
             return 0;
         }
 
-        var scaled = decimal.Round(meters * factor, MidpointRounding.AwayFromZero);
+        return ToCost(meters * factor);
+    }
+
+    /// <summary>
+    /// Moves a decimal cost into the integer domain the solver works in, clamped so a
+    /// misconfigured penalty can never produce a cost that overflows a summed route.
+    /// </summary>
+    private static long ToCost(decimal value)
+    {
+        if (value <= 0)
+        {
+            return 0;
+        }
+
+        var scaled = decimal.Round(value, MidpointRounding.AwayFromZero);
         return scaled >= RouteMatrix.UnreachableValue ? RouteMatrix.UnreachableValue : (long)scaled;
     }
 

@@ -24,4 +24,18 @@ public interface IUserRepository
         DateTime dayStartUtc,
         DateTime dayEndUtc,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Same as <see cref="GetDriverCandidatesAsync" />, restricted to the given drivers.
+    /// </summary>
+    /// <remarks>
+    /// Route planning scores the explicit driver selections of a single request, not the whole
+    /// fleet. Filtering here keeps the candidate query proportional to the plan instead of to
+    /// the number of drivers on the platform.
+    /// </remarks>
+    Task<IReadOnlyList<DriverAssignmentCandidate>> GetDriverCandidatesByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        DateTime dayStartUtc,
+        DateTime dayEndUtc,
+        CancellationToken cancellationToken = default);
 }

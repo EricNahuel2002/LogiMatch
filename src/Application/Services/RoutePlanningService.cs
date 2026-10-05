@@ -3,25 +3,33 @@ using Application.Integrations;
 using Application.Persistence;
 using Application.RoutePlanning;
 using Domain.Entities;
+using Domain.Services;
 using Domain.ValueObjects;
 using FluentValidation;
 
 namespace Application.Services;
 
 /// <summary>
-/// Turns an explicit resource selection into a routing proposal over every pending shipment.
-/// The service owns every rule that can be checked before the solver runs: the selection has
-/// to be resolvable, there has to be something plannable to plan, and the routing matrix has to
-/// be complete. Anything else is reported as a conflict before a single OR-Tools model is built.
-/// </summary>
-/// <remarks>
-/// A pending shipment that cannot be routed never fails the preview on its own: it comes back
-/// as an excluded shipment with its reason, so one shipment still waiting for an address does
-/// not block the rest of the plan.
-/// </remarks>
-/// <remarks>
-/// The service deliberately takes no <c>IUnitOfWork</c>: a preview is a proposal, not a change.
-/// </remarks>
+    /// Turns an explicit resource selection into a routing proposal over every pending shipment.
+    /// The service owns every rule that can be checked before the solver runs: the selection has
+    /// to be resolvable, there has to be something plannable to plan, the routing matrix has to
+    /// be complete, and at least one of the selected drivers has to be worth planning with.
+    /// Anything else is reported as a conflict before a single OR-Tools model is built.
+    /// </summary>
+    /// <remarks>
+    /// A pending shipment that cannot be routed never fails the preview on its own: it comes back
+    /// as an excluded shipment with its reason, so one shipment still waiting for an address does
+    /// not block the rest of the plan.
+    /// </remarks>
+    /// <remarks>
+    /// The same applies to drivers. A selected driver that is not worth solving for comes back in
+    /// <see cref="RoutePlanningProposalResponse.ExcludedDrivers" /> with its reason and its score
+    /// instead of silently narrowing the plan, so the caller can see that the fleet it asked for
+    /// is not the fleet that got planned.
+    /// </remarks>
+    /// <remarks>
+    /// The service deliberately takes no <c>IUnitOfWork</c>: a preview is a proposal, not a change.
+    /// </remarks>
 public class RoutePlanningService : IRoutePlanningService
 {
     /// <summary>
@@ -54,6 +62,7 @@ public class RoutePlanningService : IRoutePlanningService
     private readonly IDepositAssignmentPolicy _depositAssignment;
     private readonly IRouteMatrixClient _routeMatrixClient;
     private readonly IVehicleRoutingSolver _solver;
+    private readonly IDriverEligibilityFilter _driverEligibility;
     private readonly IValidator<PlanRoutesRequest> _validator;
     private readonly TimeProvider _timeProvider;
 
@@ -65,6 +74,7 @@ public class RoutePlanningService : IRoutePlanningService
         IDepositAssignmentPolicy depositAssignment,
         IRouteMatrixClient routeMatrixClient,
         IVehicleRoutingSolver solver,
+        IDriverEligibilityFilter driverEligibility,
         IValidator<PlanRoutesRequest> validator,
         TimeProvider timeProvider)
     {
@@ -75,6 +85,7 @@ public class RoutePlanningService : IRoutePlanningService
         _depositAssignment = depositAssignment;
         _routeMatrixClient = routeMatrixClient;
         _solver = solver;
+        _driverEligibility = driverEligibility;
         _validator = validator;
         _timeProvider = timeProvider;
     }
@@ -157,14 +168,34 @@ public class RoutePlanningService : IRoutePlanningService
                 "selected drivers and shipments.");
         }
 
-        var problem = new VehicleRoutingProblem(
-            planningShipments,
+        // Scoring reads the same matrix the solver gets, and it can drop drivers from the plan,
+        // so it has to happen before the problem is assembled rather than after.
+        var dayStartUtc = TimeZoneInfo.ConvertTimeToUtc(horizonStart, ArgentinaTimeZone);
+        var eligibility = await _driverEligibility.SelectAsync(
             planningDrivers,
-            planningVehicles,
-            depositNodeOrder,
-            horizonSeconds,
+            vehiclesById,
+            planningShipments,
             matrix.Distances,
-            matrix.Durations);
+            matrix.Durations,
+            dayStartUtc,
+            dayStartUtc.AddDays(1),
+            cancellationToken);
+
+        if (!eligibility.HasAnyDriver)
+        {
+            throw new InvalidOperationException(
+                $"None of the {planningDrivers.Count} selected drivers is eligible to plan: " +
+                $"{DescribeExclusions(eligibility.ExcludedDrivers)}.");
+        }
+
+        var problem = BuildProblem(
+            eligibility,
+            planningDrivers,
+            depositNodeOrder,
+            planningVehicles,
+            planningShipments,
+            horizonSeconds,
+            matrix);
 
         var solution = _solver.Solve(problem, cancellationToken)
             ?? throw new InvalidOperationException(
@@ -187,7 +218,78 @@ public class RoutePlanningService : IRoutePlanningService
             solution.Routes.Sum(r => r.Stops.Count),
             solution.TotalDistanceMeters,
             solution.TotalDurationMinutes,
-            excludedShipments);
+            excludedShipments,
+            eligibility.ExcludedDrivers
+                .Select(d => new ExcludedDriverResponse(
+                    d.DriverId,
+                    d.Score,
+                    d.Reason,
+                    d.Detail))
+                .ToList());
+    }
+
+    /// <summary>
+    /// Rebuilds the routing problem around the drivers that survived the eligibility filter.
+    /// </summary>
+    /// <remarks>
+    /// The matrices are projected instead of fetched again: they already hold every cell the
+    /// surviving nodes need, and a driver left out of the plan must not remain a node, or the
+    /// solver would keep solving for a vehicle that is never used. Dropping a driver can also
+    /// orphan a deposit that only that driver was assigned to, and an orphan node would make the
+    /// whole problem infeasible.
+    /// </remarks>
+    private static VehicleRoutingProblem BuildProblem(
+        DriverEligibilityResult eligibility,
+        IReadOnlyList<PlanningDriverData> submittedDrivers,
+        IReadOnlyList<Guid> submittedDepositOrder,
+        IReadOnlyList<PlanningVehicleData> submittedVehicles,
+        IReadOnlyList<PlanningShipmentData> shipments,
+        long horizonSeconds,
+        RouteMatrixSet matrix)
+    {
+        var keptDrivers = eligibility.KeptDrivers;
+        var keptDriverIds = keptDrivers.Select(d => d.DriverId).ToHashSet();
+        var keptDepositIds = keptDrivers.Select(d => d.DepositId).ToHashSet();
+
+        var depositNodeOffset = submittedDrivers.Count + shipments.Count;
+
+        var keptNodeIndices = new List<int>(
+            keptDrivers.Count + shipments.Count + keptDepositIds.Count);
+
+        // Node indexes are positions in the submitted layout, which is drivers, shipments, then
+        // deposits, and they must stay ascending for the projection to line up with the nodes.
+        for (var submitted = 0; submitted < submittedDrivers.Count; submitted++)
+        {
+            if (keptDriverIds.Contains(submittedDrivers[submitted].DriverId))
+            {
+                keptNodeIndices.Add(submitted);
+            }
+        }
+
+        keptNodeIndices.AddRange(Enumerable.Range(submittedDrivers.Count, shipments.Count));
+
+        for (var submitted = 0; submitted < submittedDepositOrder.Count; submitted++)
+        {
+            if (keptDepositIds.Contains(submittedDepositOrder[submitted]))
+            {
+                keptNodeIndices.Add(depositNodeOffset + submitted);
+            }
+        }
+
+        var keptVehicles = keptDrivers
+            .Select(d => d.VehicleId)
+            .Distinct()
+            .Select(id => submittedVehicles.First(v => v.VehicleId == id))
+            .ToList();
+
+        return new VehicleRoutingProblem(
+            shipments,
+            keptDrivers,
+            keptVehicles,
+            submittedDepositOrder.Where(keptDepositIds.Contains).ToList(),
+            horizonSeconds,
+            matrix.Distances.Project(keptNodeIndices),
+            matrix.Durations.Project(keptNodeIndices));
     }
 
     private static void EnsureResourcesExist(
@@ -285,7 +387,7 @@ public class RoutePlanningService : IRoutePlanningService
 
             plannable.Add(new PlanningShipmentData(
                 shipment.ShipmentId,
-                shipment.Priority,
+                ShipmentPriorityScoring.UrgencyOf(shipment.Priority),
                 shipment.WeightKg,
                 shipment.Destination,
                 ToTimeWindow(
@@ -330,6 +432,12 @@ public class RoutePlanningService : IRoutePlanningService
             .GroupBy(e => e.Reason)
             .Select(group => $"{string.Join(", ", group.Select(e => e.ShipmentId))} ({group.Key})"));
 
+    private static string DescribeExclusions(IReadOnlyList<IneligibleDriver> excluded) =>
+        string.Join(", ", excluded
+            .GroupBy(e => e.Reason)
+            .Select(group =>
+                $"{string.Join(", ", group.Select(e => e.DriverId))} ({group.Key}: {group.First().Detail})"));
+
     private static void EnsureVehiclesAreUsable(
         IReadOnlyList<DriverSelectionRequest> selections,
         IReadOnlyDictionary<Guid, Vehicle> vehicles)
@@ -372,6 +480,12 @@ public class RoutePlanningService : IRoutePlanningService
             .ToList();
     }
 
+    /// <summary>
+    /// Builds the pre-scoring driver list, which only exists to lay out the routing matrix and
+    /// to give the eligibility filter something to score. The score is set here only as a
+    /// placeholder: <see cref="IDriverEligibilityFilter" /> replaces the whole list before the
+    /// problem reaches the solver, so a driver that never got a real score cannot reach it.
+    /// </summary>
     private static IReadOnlyList<PlanningDriverData> BuildPlanningDrivers(
         IReadOnlyList<DriverSelectionRequest> selections,
         IReadOnlyDictionary<Guid, Driver> drivers,
@@ -382,7 +496,8 @@ public class RoutePlanningService : IRoutePlanningService
                 s.DriverId,
                 drivers[s.DriverId].CurrentLocation!,
                 s.VehicleId,
-                depositByDriver[s.DriverId]))
+                depositByDriver[s.DriverId],
+                Score: 0m))
             .ToList();
     }
 

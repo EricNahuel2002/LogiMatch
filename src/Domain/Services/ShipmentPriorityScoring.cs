@@ -31,6 +31,17 @@ public static class ShipmentPriorityScoring
     public const decimal NormalThreshold = 0.5m;
     public const decimal HighThreshold = 0.75m;
 
+    /// <summary>
+    /// Urgency assigned to each priority level. The gaps are uneven because they mirror the
+    /// arc cost factors the solver has always applied: Urgent halves the arc into its node,
+    /// while Low multiplies it by 1.5. Linearizing on the enum ordinals instead would make
+    /// Urgent and High equidistant, which is not what the solver ever did.
+    /// </summary>
+    public const decimal UrgentUrgency = 1.00m;
+    public const decimal HighUrgency = 0.75m;
+    public const decimal NormalUrgency = 0.50m;
+    public const decimal LowUrgency = 0.00m;
+
     public static IReadOnlyList<ShipmentScoreResult> Assign(
         IReadOnlyList<ShipmentPriorityInput> inputs)
     {
@@ -96,6 +107,25 @@ public static class ShipmentPriorityScoring
             .ThenBy(r => r.ShipmentId)
             .ToList();
     }
+
+    /// <summary>
+    /// Inverse of <see cref="ToPriority(decimal)" />: turns a stored priority into the 0..1
+    /// urgency the routing solver works with. Kept next to it so the two directions cannot
+    /// drift apart.
+    /// </summary>
+    /// <remarks>
+    /// Only relative ordering and magnitude matter downstream, so the enum is linearized
+    /// instead of being kept as is: it reaches the solver as a multiplicative cost factor and
+    /// as the driver mismatch penalty weight, both of which need a continuous magnitude.
+    /// </remarks>
+    public static decimal UrgencyOf(ShipmentPriority priority) => priority switch
+    {
+        ShipmentPriority.Urgent => UrgentUrgency,
+        ShipmentPriority.High => HighUrgency,
+        ShipmentPriority.Normal => NormalUrgency,
+        ShipmentPriority.Low => LowUrgency,
+        _ => NormalUrgency
+    };
 
     public static ShipmentPriority ToPriority(decimal score)
     {

@@ -127,4 +127,53 @@ public class ShipmentPriorityScoringTests
     {
         Assert.Equal(expected, ShipmentPriorityScoring.ToPriority(score));
     }
+
+    [Theory]
+    [InlineData(ShipmentPriority.Low, 0.00)]
+    [InlineData(ShipmentPriority.Normal, 0.50)]
+    [InlineData(ShipmentPriority.High, 0.75)]
+    [InlineData(ShipmentPriority.Urgent, 1.00)]
+    public void UrgencyOf_MapsPriorityToUrgency(ShipmentPriority priority, decimal expected)
+    {
+        Assert.Equal(expected, ShipmentPriorityScoring.UrgencyOf(priority));
+    }
+
+    /// <summary>
+    /// The solver turns urgency into an arc multiplier with <c>1.5 - urgency</c>. These are the
+    /// multipliers it used to apply per priority level, so this pins the linearity of the
+    /// mapping: the priority mechanism must behave exactly as it did before urgency existed.
+    /// </summary>
+    [Theory]
+    [InlineData(ShipmentPriority.Low, 1.5)]
+    [InlineData(ShipmentPriority.Normal, 1.0)]
+    [InlineData(ShipmentPriority.High, 0.75)]
+    [InlineData(ShipmentPriority.Urgent, 0.5)]
+    public void UrgencyOf_PreservesLegacyArcCostFactor(
+        ShipmentPriority priority,
+        decimal legacyFactor)
+    {
+        var factor = 1.5m - ShipmentPriorityScoring.UrgencyOf(priority);
+
+        Assert.Equal(legacyFactor, factor);
+    }
+
+    [Fact]
+    public void UrgencyOf_UnknownPriority_FallsBackToNormal()
+    {
+        Assert.Equal(
+            ShipmentPriorityScoring.NormalUrgency,
+            ShipmentPriorityScoring.UrgencyOf((ShipmentPriority)99));
+    }
+
+    [Theory]
+    [InlineData(ShipmentPriority.Low)]
+    [InlineData(ShipmentPriority.Normal)]
+    [InlineData(ShipmentPriority.High)]
+    [InlineData(ShipmentPriority.Urgent)]
+    public void UrgencyOf_StaysWithinZeroToOne(ShipmentPriority priority)
+    {
+        var urgency = ShipmentPriorityScoring.UrgencyOf(priority);
+
+        Assert.InRange(urgency, 0m, 1m);
+    }
 }

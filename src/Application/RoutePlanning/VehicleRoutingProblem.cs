@@ -61,6 +61,36 @@ public sealed class VehicleRoutingProblem
         }
 
         EnsureWindowsFitHorizon();
+        EnsureUnitRanges();
+    }
+
+    /// <summary>
+    /// Scores and urgencies are used as multipliers and weights, so a value outside 0..1 would
+    /// silently produce a nonsensical objective: a negative arc cost invites the solver to build
+    /// longer routes on purpose, and a urgency above 1 inverts the driver preference.
+    /// </summary>
+    private void EnsureUnitRanges()
+    {
+        foreach (var driver in Drivers)
+        {
+            if (driver.Score is < 0m or > 1m)
+            {
+                throw new ArgumentException(
+                    $"Driver {driver.DriverId} has a score of {driver.Score} outside the 0..1 range.",
+                    nameof(Drivers));
+            }
+        }
+
+        foreach (var shipment in Shipments)
+        {
+            if (shipment.Urgency is < 0m or > 1m)
+            {
+                throw new ArgumentException(
+                    $"Shipment {shipment.ShipmentId} has an urgency of {shipment.Urgency} " +
+                    "outside the 0..1 range.",
+                    nameof(Shipments));
+            }
+        }
     }
 
     /// <summary>

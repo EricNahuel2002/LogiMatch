@@ -7,7 +7,7 @@ public class DriverScoringTests
     [Fact]
     public void Rank_WithSingleCandidate_UsesNeutralNormalization()
     {
-        var input = new DriverScoringInput(Guid.NewGuid(), 1, 0, 0, 1000, 30, 500m);
+        var input = new DriverScoringInput(Guid.NewGuid(), 1, 0, 0, 1000, 30, 500m, null);
 
         var ranked = DriverScoring.Rank([input]);
 
@@ -21,8 +21,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_CloserDriver_WinsWhenOtherMetricsAreEqual()
     {
-        var driverA = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 2000, 30, 100m);
-        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 500, 10, 100m);
+        var driverA = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 2000, 30, 100m, null);
+        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 500, 10, 100m, null);
 
         var ranked = DriverScoring.Rank([driverA, driverB]);
 
@@ -32,8 +32,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_MoreSuccessfulAttempts_WinsWhenDistanceIsEqual()
     {
-        var driverA = new DriverScoringInput(Guid.NewGuid(), 5, 0, 0, 1000, 30, 100m);
-        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
+        var driverA = new DriverScoringInput(Guid.NewGuid(), 5, 0, 0, 1000, 30, 100m, null);
+        var driverB = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
 
         var ranked = DriverScoring.Rank([driverA, driverB]);
 
@@ -43,8 +43,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_BusierDriver_LosesWhenOtherMetricsAreEqual()
     {
-        var freeDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
-        var busyDriver = new DriverScoringInput(Guid.NewGuid(), 0, 2, 1, 1000, 30, 100m);
+        var freeDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+        var busyDriver = new DriverScoringInput(Guid.NewGuid(), 0, 2, 1, 1000, 30, 100m, null);
 
         var ranked = DriverScoring.Rank([freeDriver, busyDriver]);
 
@@ -77,6 +77,87 @@ public class DriverScoringTests
     }
 
     [Fact]
+    public void Rank_DriverWithoutCost_ScoresNeutralInsteadOfCheapest()
+    {
+        // Lower is better on this criterion, so treating a missing cost as zero used to make the
+        // driver with no metrics look like the cheapest one in the pool.
+        var expensive = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 500m);
+        var unknownCost = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+
+        var ranked = DriverScoring.Rank([expensive, unknownCost]);
+
+        Assert.Equal(expensive.DriverId, ranked[0].DriverId);
+    }
+
+    [Fact]
+    public void Rank_DriverWithoutCost_LandsBetweenTheTwoCheapest()
+    {
+        var priciest = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 900m);
+        var unknownCost = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+        var cheapest = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 100m);
+
+        var ranked = DriverScoring.Rank([priciest, unknownCost, cheapest]);
+
+        Assert.Equal(cheapest.DriverId, ranked[0].DriverId);
+        Assert.Equal(unknownCost.DriverId, ranked[1].DriverId);
+        Assert.Equal(priciest.DriverId, ranked[2].DriverId);
+    }
+
+    [Fact]
+    public void Rank_WhenNoDriverHasCost_EveryDriverScoresTheSameOnIt()
+    {
+        var first = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+        var second = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+
+        var ranked = DriverScoring.Rank([first, second]);
+
+        // Every criterion ties at the neutral midpoint, cost included, so the score is the midpoint.
+        Assert.Equal(0.5m, ranked[0].Score);
+        Assert.Equal(0.5m, ranked[1].Score);
+    }
+
+    [Fact]
+    public void Rank_WithSingleCandidateWithoutCost_UsesNeutralNormalization()
+    {
+        var input = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 500m, null);
+
+        var ranked = DriverScoring.Rank([input]);
+
+        Assert.Equal(0.5m, Assert.Single(ranked).Score);
+    }
+
+    [Fact]
+    public void Rank_EqualCostsBetweenDrivers_StayNeutral()
+    {
+        var first = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 300m);
+        var second = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 300m);
+
+        var ranked = DriverScoring.Rank([first, second]);
+
+        Assert.Equal(ranked[0].Score, ranked[1].Score);
+    }
+
+    [Fact]
+    public void Rank_DriverWithoutCost_IsTieBrokenAfterTheOnesWithCost()
+    {
+        // A cost of 250 sits on the neutral midpoint of the 100..400 range, so all three drivers
+        // tie on the criterion and the order falls to the tie break, which puts an unknown cost
+        // last because it is the weaker showing.
+        var first = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 250m);
+        var second = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, 250m);
+        var unknownCost = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+
+        var ranked = DriverScoring.Rank([unknownCost, first, second]);
+
+        Assert.Equal(0.5m, ranked[0].Score);
+        Assert.Equal(0.5m, ranked[1].Score);
+        Assert.Equal(0.5m, ranked[2].Score);
+        Assert.NotEqual(unknownCost.DriverId, ranked[0].DriverId);
+        Assert.NotEqual(unknownCost.DriverId, ranked[1].DriverId);
+        Assert.Equal(unknownCost.DriverId, ranked[2].DriverId);
+    }
+
+    [Fact]
     public void OperationCostWeight_EqualsDistanceWeight()
     {
         Assert.Equal(DriverScoring.DistanceWeight, DriverScoring.OperationCostWeight);
@@ -97,8 +178,8 @@ public class DriverScoringTests
         var idLow = Guid.NewGuid();
         var idHigh = Guid.NewGuid();
 
-        var tied = new DriverScoringInput(idHigh, 0, 0, 0, 500, 10, 100m);
-        var near = new DriverScoringInput(idLow, 0, 0, 0, 400, 10, 100m);
+        var tied = new DriverScoringInput(idHigh, 0, 0, 0, 500, 10, 100m, null);
+        var near = new DriverScoringInput(idLow, 0, 0, 0, 400, 10, 100m, null);
 
         var ranked = DriverScoring.Rank([tied, near]);
 
@@ -108,8 +189,8 @@ public class DriverScoringTests
     [Fact]
     public void Rank_FasterDriver_WinsWhenOtherMetricsAreEqual()
     {
-        var slowDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
-        var fastDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 10, 100m);
+        var slowDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
+        var fastDriver = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 10, 100m, null);
 
         var ranked = DriverScoring.Rank([slowDriver, fastDriver]);
 
@@ -122,7 +203,7 @@ public class DriverScoringTests
         var now = new DateTime(2026, 9, 9, 9, 0, 0);
         var windowStart = now.AddMinutes(15);
         var windowEnd = now.AddMinutes(60);
-        var onTime = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m);
+        var onTime = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 30, 100m, null);
 
         var feasible = DriverScoring.FilterFeasible([onTime], now, windowStart, windowEnd);
 
@@ -135,7 +216,7 @@ public class DriverScoringTests
         var now = new DateTime(2026, 9, 9, 9, 0, 0);
         var windowStart = now.AddMinutes(30);
         var windowEnd = now.AddMinutes(60);
-        var early = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m);
+        var early = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m, null);
 
         var feasible = DriverScoring.FilterFeasible([early], now, windowStart, windowEnd);
 
@@ -148,7 +229,7 @@ public class DriverScoringTests
         var now = new DateTime(2026, 9, 9, 9, 0, 0);
         var windowStart = now.AddMinutes(-60);
         var windowEnd = now.AddMinutes(-30);
-        var late = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m);
+        var late = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m, null);
 
         var feasible = DriverScoring.FilterFeasible([late], now, windowStart, windowEnd);
 
@@ -161,7 +242,7 @@ public class DriverScoringTests
         var now = new DateTime(2026, 9, 9, 9, 0, 0);
         var windowStart = now.AddMinutes(15);
         var windowEnd = now.AddMinutes(30);
-        var onTime = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m);
+        var onTime = new DriverScoringInput(Guid.NewGuid(), 0, 0, 0, 1000, 15, 100m, null);
 
         var feasible = DriverScoring.FilterFeasible([onTime], now, windowStart, windowEnd);
 

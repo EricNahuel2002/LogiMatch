@@ -50,7 +50,11 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
         var (dayStartUtc, dayEndUtc) = GetCurrentArgentinaDayUtc();
         var candidates = await _users.GetDriverCandidatesAsync(dayStartUtc, dayEndUtc, cancellationToken);
 
-        var eligible = new List<(Guid DriverId, Coordinate Location, DriverScoringInput Input)>();
+        var eligible = new List<(
+            Guid DriverId,
+            Coordinate Location,
+            DriverScoringInput Input,
+            decimal EstimatedOperationCost)>();
 
         foreach (var candidate in candidates)
         {
@@ -90,7 +94,8 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                     0,
                     0,
                     freeCapacityKg,
-                    estimatedOperationCost)));
+                    estimatedOperationCost),
+                estimatedOperationCost));
         }
 
         if (eligible.Count == 0)
@@ -106,7 +111,7 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
             origins, shipment.RouteStop.Coordinate, cancellationToken);
 
         var inputs = new List<DriverScoringInput>();
-        foreach (var (driverId, _, input) in eligible)
+        foreach (var (driverId, _, input, _) in eligible)
         {
             if (metrics.TryGetValue(driverId, out var routeMetrics))
             {
@@ -135,6 +140,8 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
         var rankIndex = ShipmentPriorityScoring.PriorityToRankIndex(shipment.Priority, ranked.Count);
         var recommendedDriverId = ranked[rankIndex].DriverId;
 
+        var costByDriverId = eligible.ToDictionary(e => e.DriverId, e => e.EstimatedOperationCost);
+
         var ranking = ranked
             .Select(result => new DriverRankingItem(
                 result.DriverId,
@@ -145,7 +152,7 @@ public class ShipmentAssignmentService : IShipmentAssignmentService
                 result.Input.DistanceMeters,
                 result.Input.DurationMinutes,
                 result.Input.FreeCapacityKg,
-                result.Input.EstimatedOperationCost))
+                costByDriverId[result.DriverId]))
             .ToList();
 
         return new DriverAssignmentSuggestion(shipmentId, recommendedDriverId, ranking, shipment.Priority);

@@ -873,6 +873,148 @@ public class RoutePlanningPreviewTests
         }
     }
 
+    /// <summary>
+    /// Submits the two demo drivers in the given order. The order is not cosmetic: node order in
+    /// the matrix is submission order, and the stub matrix puts the second driver next to the
+    /// shipments. Submitting the far one first is what makes the bigger truck belong to the weaker
+    /// scored driver, which is the situation this pair of tests reproduces.
+    /// </summary>
+    private static PlanRoutesRequest Request(SeededDriver first, SeededDriver second, Guid depositId) => new()
+    {
+        DriverSelections =
+        [
+            new DriverSelectionRequest
+            {
+                DriverId = first.DriverId,
+                VehicleId = first.VehicleId,
+                DepositId = depositId
+            },
+            new DriverSelectionRequest
+            {
+                DriverId = second.DriverId,
+                VehicleId = second.VehicleId,
+                DepositId = depositId
+            }
+        ]
+    };
+
+    /// <summary>
+    /// Loads the two demo drivers whose vehicles differ enough to matter: AA123BB carries 1500 kg
+    /// and AI444JJ carries 2000 kg, and AI444JJ costs 10 more to run, so the bigger truck is never
+    /// the cheaper one.
+    /// </summary>
+    private static async Task<(SeededDriver Small, SeededDriver Big)> LoadSeedPairAsync(LogiMatchDbContext db) =>
+        (
+            await LoadSeededDriverAsync(db, "chofer1@logimatch.com", "AA123BB"),
+            await LoadSeededDriverAsync(db, "chofer5@logimatch.com", "AI444JJ"));
+
+    /// <summary>
+    /// The truck that only fits the heaviest shipment sits on the driver the scoring ranks last,
+    /// so dropping that driver used to leave a plan nobody could complete. The score expresses a
+    /// preference; capacity is a constraint, and the plan has to stay solvable.
+    /// </summary>
+    [Fact]
+    public async Task Preview_KeepsTheOnlyTruckThatFitsEvenWhenItsDriverScoresWorst()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+        var (small, big) = await LoadSeedPairAsync(arrange.Db);
+
+        // The heaviest shipment fits both trucks, so both drivers reach the ranking, but the 2800 kg
+        // total does not fit either one alone. Several partitions work, so the test does not depend
+        // on the solver finding one exact split.
+        var created = new List<Guid>
+        {
+            (await TestDataBuilder.CreatePendingShipmentWithStopAsync(
+                arrange.Db, [OrderItem.Create("Palet pesado", 10m, 1, 1400m)])).Id,
+            (await TestDataBuilder.CreatePendingShipmentWithStopAsync(
+                arrange.Db, [OrderItem.Create("Caja grande", 10m, 1, 600m)])).Id,
+            (await TestDataBuilder.CreatePendingShipmentWithStopAsync(
+                arrange.Db, [OrderItem.Create("Caja mediana", 10m, 1, 500m)])).Id,
+            (await TestDataBuilder.CreatePendingShipmentWithStopAsync(
+                arrange.Db, [OrderItem.Create("Caja chica", 10m, 1, 300m)])).Id
+        };
+
+        var parked = await ParkForeignPendingShipmentsAsync([.. created]);
+
+        try
+        {
+            using var client = await CreateAdminClientAsync();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/route-planning/preview",
+                Request(big, small, DemoDataSeeder.CentralDepositId));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            Assert.NotNull(proposal);
+            Assert.Empty(proposal!.ExcludedDrivers);
+            Assert.Equal(4, proposal.ShipmentCount);
+            Assert.Equal(2, proposal.DriverCount);
+            Assert.Equal(2800m, proposal.Assignments.Sum(a => a.LoadKg));
+
+            // Both trucks ran, which is the point: 2800 kg does not fit on either one alone.
+            Assert.Equal(2, proposal.Assignments.Count);
+            foreach (var assignment in proposal.Assignments)
+            {
+                var capacity = assignment.DriverId == small.DriverId ? small.CapacityKg : big.CapacityKg;
+                Assert.True(assignment.LoadKg <= capacity);
+                Assert.NotEmpty(assignment.Stops);
+            }
+        }
+        finally
+        {
+            await RestorePendingShipmentsAsync(parked);
+        }
+    }
+
+    /// <summary>
+    /// Same two drivers, same order, but a plan small enough that one truck covers it. Here the
+    /// scoring is free to have its way, which proves the previous test passed because the driver
+    /// was promoted and not because it simply scored well.
+    /// </summary>
+    [Fact]
+    public async Task Preview_DropsTheWorstScoringDriverWhenThePlanDoesNotNeedTheBigTruck()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+        var (small, big) = await LoadSeedPairAsync(arrange.Db);
+
+        var created = new List<Guid>
+        {
+            (await TestDataBuilder.CreatePendingShipmentWithStopAsync(
+                arrange.Db, [OrderItem.Create("Caja mediana", 10m, 1, 600m)])).Id,
+            (await TestDataBuilder.CreatePendingShipmentWithStopAsync(
+                arrange.Db, [OrderItem.Create("Caja chica", 10m, 1, 400m)])).Id
+        };
+
+        var parked = await ParkForeignPendingShipmentsAsync([.. created]);
+
+        try
+        {
+            using var client = await CreateAdminClientAsync();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/route-planning/preview",
+                Request(big, small, DemoDataSeeder.CentralDepositId));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            Assert.NotNull(proposal);
+            Assert.Equal(1000m, proposal!.Assignments.Sum(a => a.LoadKg));
+            Assert.Equal(1, proposal.DriverCount);
+
+            var excluded = Assert.Single(proposal.ExcludedDrivers);
+            Assert.Equal(big.DriverId, excluded.DriverId);
+            Assert.Equal(DriverIneligibilityReason.ScoreBelowMinimum, excluded.Reason);
+            Assert.NotNull(excluded.Score);
+        }
+        finally
+        {
+            await RestorePendingShipmentsAsync(parked);
+        }
+    }
+
     private static async Task<SeededDriver> LoadSeededDriverAsync(
         LogiMatchDbContext db,
         string email,
@@ -915,7 +1057,8 @@ public class RoutePlanningPreviewTests
         int ShipmentCount,
         long TotalDistanceMeters,
         int TotalDurationMinutes,
-        IReadOnlyList<ExcludedShipmentResponse> ExcludedShipments);
+        IReadOnlyList<ExcludedShipmentResponse> ExcludedShipments,
+        IReadOnlyList<ExcludedDriverResponse> ExcludedDrivers);
 
     private sealed record AssignmentResponse(
         Guid DriverId,
@@ -927,4 +1070,10 @@ public class RoutePlanningPreviewTests
     private sealed record StopResponse(Guid ShipmentId, int StopOrder);
 
     private sealed record ExcludedShipmentResponse(Guid ShipmentId, string Reason);
+
+    private sealed record ExcludedDriverResponse(
+        Guid DriverId,
+        decimal? Score,
+        DriverIneligibilityReason Reason,
+        string Detail);
 }

@@ -6,6 +6,7 @@ using Application.Services;
 using Application.Validators;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Services;
 using Domain.ValueObjects;
 using FluentValidation;
 using FluentValidation.Results;
@@ -35,6 +36,11 @@ public class RoutePlanningServiceTests
     private static readonly DateTimeOffset Now =
         new(2026, 3, 10, 14, 0, 0, TimeSpan.FromHours(-3));
 
+    /// <summary>
+    /// The eligibility filter runs for real, on top of the mocked repositories: the point of
+    /// these tests is what reaches the solver, and a mocked filter would let any driver list
+    /// through untouched.
+    /// </summary>
     private RoutePlanningService CreateService(IValidator<PlanRoutesRequest>? validator = null) =>
         new(
             _shipments.Object,
@@ -44,6 +50,7 @@ public class RoutePlanningServiceTests
             new NearestDepositAssignmentPolicy(),
             _routeMatrixClient.Object,
             _solver.Object,
+            new DriverEligibilityFilter(_users.Object, new DriverScoringOptions().ToPolicy()),
             validator ?? FluentValidationMocks.AlwaysValid<PlanRoutesRequest>().Object,
             new FixedTimeProvider(Now));
 
@@ -94,8 +101,55 @@ public class RoutePlanningServiceTests
         _deposits.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([deposit ?? BuildDeposit(_depositId, Depot)]);
 
+        ArrangeCandidates(Candidate(_driverId, successes: 10, kilometers: 50m));
+
         ArrangeShipments(shipment ?? BuildShipment(_shipmentId));
     }
+
+    /// <summary>
+    /// Scoring metrics per driver, restricted to the drivers being planned, which is how the
+    /// repository contract works: a plan is scored against its own selection, not the fleet.
+    /// </summary>
+    private void ArrangeCandidates(params DriverAssignmentCandidate[] candidates)
+    {
+        _users
+            .Setup(u => u.GetDriverCandidatesByIdsAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<IReadOnlyCollection<Guid>, DateTime, DateTime, CancellationToken>(
+                (ids, _, _, _) => Task.FromResult<IReadOnlyList<DriverAssignmentCandidate>>(
+                    [.. candidates.Where(c => ids.Contains(c.DriverId))]));
+    }
+
+    /// <summary>
+    /// Neutral defaults with everything zeroed, so a test only has to state the metrics that
+    /// are meant to make a driver stand out.
+    /// </summary>
+    private static DriverAssignmentCandidate Candidate(
+        Guid driverId,
+        int successes = 0,
+        int pending = 0,
+        int inProgress = 0,
+        decimal inProgressWeightKg = 0m,
+        decimal salaryPerHour = 0m,
+        decimal kilometers = 0m,
+        decimal tolls = 0m) =>
+        new(
+            driverId,
+            DriverLocation,
+            MaxActiveVehicleCapacityKg: 500m,
+            successes,
+            pending,
+            inProgress,
+            inProgressWeightKg,
+            salaryPerHour,
+            kilometers,
+            VehicleFuelConsumption: 0m,
+            VehicleFuelPrice: 0m,
+            VehicleMaintenanceCost: 0m,
+            tolls);
 
     /// <summary>
     /// Answers the pending shipment query, then hands the solver a stop for each one. The
@@ -163,9 +217,9 @@ public class RoutePlanningServiceTests
         return driver;
     }
 
-    private static Vehicle BuildVehicle(Guid id, bool active = true)
+    private static Vehicle BuildVehicle(Guid id, bool active = true, decimal capacityKg = 500m)
     {
-        var vehicle = Vehicle.Create($"plate-{id:N}".Substring(0, 10), 500m);
+        var vehicle = Vehicle.Create($"plate-{id:N}".Substring(0, 10), capacityKg);
         typeof(Vehicle).GetProperty(nameof(Vehicle.Id))!.SetValue(vehicle, id);
         vehicle.SetActive(active);
         return vehicle;
@@ -208,6 +262,73 @@ public class RoutePlanningServiceTests
 
     private static Guid[] PlannedShipmentIds(VehicleRoutingProblem problem) =>
         [.. problem.Shipments.Select(s => s.ShipmentId)];
+
+    /// <summary>
+    /// Two drivers sharing a deposit, both plannable. <paramref name="weakDriverId" /> is the one
+    /// expected to score below the floor; it is submitted first so the ring geometry used by the
+    /// matrix helper puts it farther from the shipments, which is what turns a mediocre driver
+    /// into one that falls under the threshold.
+    /// </summary>
+    private void ArrangeTwoDrivers(
+        Guid secondDriverId,
+        Guid secondVehicleId,
+        Guid? weakDriverId = null,
+        decimal firstVehicleCapacityKg = 500m,
+        Coordinate? secondDriverLocation = null)
+    {
+        var weak = weakDriverId ?? secondDriverId;
+        var strongIsFirst = weak != _driverId;
+
+        _users.Setup(u => u.GetDriversByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                BuildDriver(_driverId, DriverLocation),
+                BuildDriver(secondDriverId, secondDriverLocation ?? DriverLocation)
+            ]);
+
+        _vehicles.Setup(v => v.GetManyByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildVehicle(_vehicleId, capacityKg: firstVehicleCapacityKg), BuildVehicle(secondVehicleId)]);
+
+        _deposits.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildDeposit(_depositId, Depot)]);
+
+        // Strong: most deliveries done, nothing queued, short day. Weak: the opposite. Distance
+        // and duration are not stated here because they come from the matrix.
+        ArrangeCandidates(
+            strongIsFirst
+                ? Candidate(_driverId, successes: 10, kilometers: 10m)
+                : Candidate(_driverId, pending: 5, inProgress: 5, kilometers: 60m),
+            strongIsFirst
+                ? Candidate(secondDriverId, pending: 5, inProgress: 5, kilometers: 60m)
+                : Candidate(secondDriverId, successes: 10, kilometers: 10m));
+
+        ArrangeShipments(BuildShipment(_shipmentId));
+    }
+
+    private static PlanRoutesRequest TwoDriverRequest(
+        Guid firstDriverId,
+        Guid firstVehicleId,
+        Guid firstDepositId,
+        Guid secondDriverId,
+        Guid secondVehicleId,
+        Guid secondDepositId) =>
+        new()
+        {
+            DriverSelections =
+            [
+                new DriverSelectionRequest
+                {
+                    DriverId = firstDriverId,
+                    VehicleId = firstVehicleId,
+                    DepositId = firstDepositId
+                },
+                new DriverSelectionRequest
+                {
+                    DriverId = secondDriverId,
+                    VehicleId = secondVehicleId,
+                    DepositId = secondDepositId
+                }
+            ]
+        };
 
     [Fact]
     public async Task PreviewAsync_ReturnsProposalFromSolver()
@@ -321,7 +442,7 @@ public class RoutePlanningServiceTests
     }
 
     [Fact]
-    public async Task PreviewAsync_PassesShipmentWeightAndPriority()
+    public async Task PreviewAsync_PassesShipmentWeightAndUrgency()
     {
         ArrangeValidScenario(new ShipmentPlanningData(
             _shipmentId,
@@ -335,7 +456,7 @@ public class RoutePlanningServiceTests
 
         var shipment = CapturedProblem()!.Shipments[0];
         Assert.Equal(12.5m, shipment.WeightKg);
-        Assert.Equal(ShipmentPriority.Urgent, shipment.Priority);
+        Assert.Equal(ShipmentPriorityScoring.UrgentUrgency, shipment.Urgency);
     }
 
     [Fact]
@@ -673,6 +794,9 @@ public class RoutePlanningServiceTests
             .ReturnsAsync([BuildVehicle(_vehicleId), BuildVehicle(secondVehicleId)]);
         _deposits.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([BuildDeposit(_depositId, Depot)]);
+        ArrangeCandidates(
+            Candidate(_driverId, successes: 10, kilometers: 50m),
+            Candidate(secondDriverId, successes: 10, kilometers: 50m));
         ArrangeShipments(BuildShipment(_shipmentId));
 
         var request = new PlanRoutesRequest
@@ -713,6 +837,9 @@ public class RoutePlanningServiceTests
                 BuildDeposit(centralDepositId, Depot),
                 BuildDeposit(southDepositId, new Coordinate(-34.672m, -58.440m))
             ]);
+        ArrangeCandidates(
+            Candidate(_driverId, successes: 10, kilometers: 50m),
+            Candidate(secondDriverId, successes: 10, kilometers: 50m));
         ArrangeShipments(BuildShipment(_shipmentId));
 
         var request = new PlanRoutesRequest
@@ -789,6 +916,135 @@ public class RoutePlanningServiceTests
         _shipments.Verify(
             s => s.GetPendingWithPlanningDetailsAsync(It.IsAny<CancellationToken>()),
             Times.Once);
+        _users.Verify(
+            u => u.GetDriverCandidatesByIdsAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PreviewAsync_DriverWithoutCapacityForTheHeaviestShipment_IsExcluded()
+    {
+        var secondDriverId = Guid.NewGuid();
+        var secondVehicleId = Guid.NewGuid();
+        ArrangeTwoDrivers(
+            secondDriverId,
+            secondVehicleId,
+            firstVehicleCapacityKg: 5m);
+
+        var result = await CreateService().PreviewAsync(
+            TwoDriverRequest(_driverId, _vehicleId, _depositId, secondDriverId, secondVehicleId, _depositId));
+
+        var excluded = Assert.Single(result.ExcludedDrivers);
+        Assert.Equal(_driverId, excluded.DriverId);
+        Assert.Equal(DriverIneligibilityReason.InsufficientVehicleCapacity, excluded.Reason);
+        Assert.Null(excluded.Score);
+        Assert.Empty(result.ExcludedShipments);
+    }
+
+    [Fact]
+    public async Task PreviewAsync_EligibleDriversAreAllServedByTheSolver()
+    {
+        ArrangeValidScenario();
+
+        var result = await CreateService().PreviewAsync(Request);
+
+        Assert.Empty(result.ExcludedDrivers);
+        Assert.Equal(1, CapturedProblem()!.DriverCount);
+    }
+
+    /// <summary>
+    /// The excluded driver has to leave the problem entirely, matrix included: the solver
+    /// validates the matrix size against the node count, so a node left behind would either fail
+    /// the contract or keep solving for a vehicle nobody will use.
+    /// </summary>
+    /// <remarks>
+    /// The good driver is submitted second on purpose. The ring geometry used by the matrix
+    /// helper puts node 0 farther from the shipments than node 1, so the worst driver has to sit
+    /// at node 0 for the distances to work against it, which is what pushes its score under the
+    /// floor instead of merely under the average.
+    /// </remarks>
+    [Fact]
+    public async Task PreviewAsync_ExcludedDriverIsRemovedFromTheProblemAndTheMatrix()
+    {
+        var secondDriverId = Guid.NewGuid();
+        var secondVehicleId = Guid.NewGuid();
+        ArrangeTwoDrivers(secondDriverId, secondVehicleId, weakDriverId: _driverId);
+
+        var result = await CreateService().PreviewAsync(
+            TwoDriverRequest(_driverId, _vehicleId, _depositId, secondDriverId, secondVehicleId, _depositId));
+
+        var problem = CapturedProblem()!;
+        Assert.Equal(1, problem.DriverCount);
+        Assert.Equal(secondDriverId, problem.Drivers[0].DriverId);
+        Assert.Equal(problem.NodeCount, problem.DistanceMatrix.Size);
+        Assert.Equal(problem.NodeCount, problem.DurationMatrix.Size);
+
+        var excluded = Assert.Single(result.ExcludedDrivers);
+        Assert.Equal(_driverId, excluded.DriverId);
+        Assert.Equal(DriverIneligibilityReason.ScoreBelowMinimum, excluded.Reason);
+
+        // Not exactly zero: free capacity and operation cost are equal across the pool, so the
+        // weakest driver still scores neutral on those two and lands at 3/21.
+        Assert.NotNull(excluded.Score);
+        Assert.True(
+            excluded.Score < new DriverScoringOptions().MinimumScore,
+            $"Expected a score below the floor, got {excluded.Score}.");
+    }
+
+    /// <summary>
+    /// A deposit only the rejected driver was assigned to must not stay in the problem, or the
+    /// solver gets an endpoint no route can reach.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_DepositOrphanedByAnExcludedDriverIsDropped()
+    {
+        var secondDriverId = Guid.NewGuid();
+        var secondVehicleId = Guid.NewGuid();
+        var secondDepositId = Guid.NewGuid();
+        ArrangeTwoDrivers(secondDriverId, secondVehicleId, weakDriverId: _driverId, secondDriverLocation: new Coordinate(-34.90m, -58.90m));
+        _deposits.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                BuildDeposit(_depositId, Depot),
+                BuildDeposit(secondDepositId, new Coordinate(-34.90m, -58.90m))
+            ]);
+
+        await CreateService().PreviewAsync(
+            TwoDriverRequest(_driverId, _vehicleId, secondDepositId, secondDriverId, secondVehicleId, _depositId));
+
+        var problem = CapturedProblem()!;
+        Assert.Equal([_depositId], problem.DepositNodeOrder);
+        Assert.Equal(problem.NodeCount, problem.DistanceMatrix.Size);
+    }
+
+    /// <summary>
+    /// The score has to reach the solver, otherwise the eligibility filter would rank drivers
+    /// without ever letting the routing decision benefit from it.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_PassesTheEligibilityScoreToTheSolver()
+    {
+        ArrangeValidScenario();
+
+        await CreateService().PreviewAsync(Request);
+
+        Assert.Equal(0.5m, CapturedProblem()!.Drivers[0].Score);
+    }
+
+    [Fact]
+    public async Task PreviewAsync_EveryDriverIneligible_Throws()
+    {
+        ArrangeValidScenario(vehicle: BuildVehicle(_vehicleId, capacityKg: 5m));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(Request));
+
+        Assert.Contains("is eligible to plan", exception.Message);
+        Assert.Contains(_driverId.ToString(), exception.Message);
+        _solver.Verify(s => s.Solve(It.IsAny<VehicleRoutingProblem>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

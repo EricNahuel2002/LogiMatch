@@ -15,7 +15,10 @@
       <PrivateAssets>All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.13" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="9.0.13" />
   </ItemGroup>
 
   <ItemGroup>

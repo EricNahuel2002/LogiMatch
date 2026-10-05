@@ -51,13 +51,39 @@ public class UserRepository : IUserRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<DriverAssignmentCandidate>> GetDriverCandidatesAsync(
+    public Task<IReadOnlyList<DriverAssignmentCandidate>> GetDriverCandidatesAsync(
         DateTime dayStartUtc,
         DateTime dayEndUtc,
         CancellationToken cancellationToken = default)
     {
+        return LoadCandidatesAsync(null, dayStartUtc, dayEndUtc, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DriverAssignmentCandidate>> GetDriverCandidatesByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        DateTime dayStartUtc,
+        DateTime dayEndUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        return await LoadCandidatesAsync(ids, dayStartUtc, dayEndUtc, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds the scoring metrics per driver. <paramref name="ids" /> narrows the pool; every
+    /// other query is scoped by <c>driverIds</c> taken from the first one, so restricting the
+    /// drivers here is enough to restrict the whole method.
+    /// </summary>
+    private async Task<IReadOnlyList<DriverAssignmentCandidate>> LoadCandidatesAsync(
+        IReadOnlyCollection<Guid>? ids,
+        DateTime dayStartUtc,
+        DateTime dayEndUtc,
+        CancellationToken cancellationToken)
+    {
         var drivers = await _db.Users.OfType<Driver>()
             .AsNoTracking()
+            .Where(d => ids == null || ids.Contains(d.Id))
             .Select(d => new { d.Id, d.CurrentLocation, d.SalaryPerHour })
             .ToListAsync(cancellationToken);
 

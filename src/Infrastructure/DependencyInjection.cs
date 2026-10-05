@@ -9,6 +9,7 @@ using Infrastructure.RoutePlanning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure;
 
@@ -53,6 +54,20 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(
                 configuration["OpenRouteService:BaseUrl"] ?? "https://api.heigit.org/openrouteservice/");
         });
+
+        services.AddOptions<DriverScoringOptions>()
+            .Configure<IConfiguration>((options, configuration) =>
+                configuration.GetSection("DriverScoring").Bind(options))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Consumed as the domain policy, not as options: the Application layer reads the
+        // thresholds through DriverEligibilityPolicy and stays free of the options pattern.
+        services.AddSingleton(sp => sp
+            .GetRequiredService<IOptions<DriverScoringOptions>>()
+            .Value
+            .ToPolicy());
+        services.AddScoped<IDriverEligibilityFilter, DriverEligibilityFilter>();
 
         services.AddSingleton<IVehicleRoutingSolver, OrToolsVehicleRoutingSolver>();
 

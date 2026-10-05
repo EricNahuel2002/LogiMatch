@@ -1,7 +1,9 @@
 using Application.RoutePlanning;
 using Domain.Enums;
+using Domain.Services;
 using Domain.ValueObjects;
 using Infrastructure.RoutePlanning;
+using Microsoft.Extensions.Options;
 
 namespace UnitTests.Infrastructure;
 
@@ -9,7 +11,23 @@ public class OrToolsVehicleRoutingSolverTests
 {
     private static readonly Coordinate Point = new(-34.6037m, -58.3816m);
 
-    private readonly OrToolsVehicleRoutingSolver _solver = new();
+    /// <summary>
+    /// A perfect driver costs nothing extra anywhere, so the tests that are not about scoring
+    /// keep measuring what they were written to measure. Drivers below are lowered on purpose
+    /// where the score is the point.
+    /// </summary>
+    private const decimal PerfectScore = 1m;
+
+    private readonly OrToolsVehicleRoutingSolver _solver = CreateSolver();
+
+    private static OrToolsVehicleRoutingSolver CreateSolver(
+        decimal mismatchPenaltyMeters = 3000m,
+        decimal fixedCostMeters = 5000m) =>
+        new(Options.Create(new DriverScoringOptions
+        {
+            MismatchPenaltyMeters = mismatchPenaltyMeters,
+            FixedCostMeters = fixedCostMeters
+        }));
 
     /// <summary>
     /// Node layout: drivers, then shipments, then one deposit per distinct deposit id.
@@ -25,12 +43,12 @@ public class OrToolsVehicleRoutingSolverTests
         public long HorizonSeconds { get; set; } = 86_400;
 
         public PlanningShipmentData AddShipment(
-            ShipmentPriority priority = ShipmentPriority.Normal,
+            decimal urgency = 0.5m,
             decimal weightKg = 10m,
             TimeWindow? window = null)
         {
             var shipment = new PlanningShipmentData(
-                Guid.NewGuid(), priority, weightKg, Point, window);
+                Guid.NewGuid(), urgency, weightKg, Point, window);
             Shipments.Add(shipment);
             return shipment;
         }
@@ -38,7 +56,8 @@ public class OrToolsVehicleRoutingSolverTests
         public (Guid DriverId, Guid VehicleId, Guid DepositId) AddDriver(
             Guid? vehicleId = null,
             Guid? depositId = null,
-            decimal capacityKg = 100m)
+            decimal capacityKg = 100m,
+            decimal score = PerfectScore)
         {
             var driverId = Guid.NewGuid();
             var resolvedVehicleId = vehicleId ?? Guid.NewGuid();
@@ -50,7 +69,7 @@ public class OrToolsVehicleRoutingSolverTests
             }
 
             Drivers.Add(new PlanningDriverData(
-                driverId, Point, resolvedVehicleId, resolvedDepositId));
+                driverId, Point, resolvedVehicleId, resolvedDepositId, score));
 
             if (!Vehicles.Any(v => v.VehicleId == resolvedVehicleId))
             {
@@ -249,7 +268,7 @@ public class OrToolsVehicleRoutingSolverTests
     public void Solve_UrgentShipmentIsServedBeforeLowPriorityOne()
     {
         // Layout: driver(0), low(1), urgent(2), deposit(3). Distance from the driver to both
-        // shipments is identical, so only the priority weighting in the arc cost can decide
+        // shipments is identical, so only the urgency weighting in the arc cost can decide
         // the visiting order.
         var scenario = new Scenario
         {
@@ -262,8 +281,8 @@ public class OrToolsVehicleRoutingSolverTests
             ]
         };
 
-        var low = scenario.AddShipment(ShipmentPriority.Low);
-        var urgent = scenario.AddShipment(ShipmentPriority.Urgent);
+        var low = scenario.AddShipment(ShipmentPriorityScoring.LowUrgency);
+        var urgent = scenario.AddShipment(ShipmentPriorityScoring.UrgentUrgency);
         scenario.AddDriver();
 
         var solution = _solver.Solve(scenario.Build());
@@ -278,8 +297,8 @@ public class OrToolsVehicleRoutingSolverTests
     public void Solve_TotalsSumRawDistanceAndDurationOfPlannedArcs()
     {
         var scenario = new Scenario();
-        scenario.AddShipment(ShipmentPriority.Urgent);
-        scenario.AddShipment(ShipmentPriority.Low);
+        scenario.AddShipment(ShipmentPriorityScoring.UrgentUrgency);
+        scenario.AddShipment(ShipmentPriorityScoring.LowUrgency);
         scenario.AddDriver();
 
         var solution = _solver.Solve(scenario.Build());
@@ -328,5 +347,127 @@ public class OrToolsVehicleRoutingSolverTests
         Assert.NotNull(solution);
         Assert.True(solution!.IsComplete);
         Assert.True(solution.TotalDistanceMeters < RouteMatrix.UnreachableValue);
+    }
+
+    /// <summary>
+    /// The far driver is scored well above the near one, and the urgent shipment still goes to
+    /// it: the mismatch penalty has to outweigh the extra travel. This is the whole point of
+    /// feeding the score into the objective.
+    /// </summary>
+    [Fact]
+    public void Solve_UrgentGoesToTheFarHighScoreDriver()
+    {
+        var (scenario, _) = ScoreVersusDistanceScenario();
+
+        var solution = _solver.Solve(scenario.Build());
+
+        Assert.NotNull(solution);
+        var route = Assert.Single(solution!.Routes);
+        Assert.Equal(scenario.Drivers[0].DriverId, route.DriverId);
+    }
+
+    /// <summary>
+    /// Same layout with the penalties switched off: the near driver wins, which proves the
+    /// previous assertion came from the score and not from the geometry.
+    /// </summary>
+    [Fact]
+    public void Solve_WithoutPenalties_TheNearestDriverWins()
+    {
+        var (scenario, urgent) = ScoreVersusDistanceScenario();
+        var unpenalized = CreateSolver(mismatchPenaltyMeters: 0m, fixedCostMeters: 0m);
+
+        var solution = unpenalized.Solve(scenario.Build());
+
+        Assert.NotNull(solution);
+        var route = Assert.Single(solution!.Routes);
+        Assert.Equal(scenario.Drivers[1].DriverId, route.DriverId);
+        Assert.Equal(urgent.ShipmentId, Assert.Single(route.Stops).ShipmentId);
+    }
+
+    /// <summary>
+    /// A large fixed cost drops the low score driver even though serving both shipments with it
+    /// would be feasible, concentrating the work on the better driver.
+    /// </summary>
+    [Fact]
+    public void Solve_LargeFixedCost_ConcentratesWorkOnTheBestDriver()
+    {
+        var scenario = TwoIndependentClusters();
+        scenario.Drivers[1] = scenario.Drivers[1] with { Score = 0m };
+
+        var solution = _solver.Solve(scenario.Build());
+
+        Assert.NotNull(solution);
+        var route = Assert.Single(solution!.Routes);
+        Assert.Equal(scenario.Drivers[0].DriverId, route.DriverId);
+        Assert.Equal(2, route.Stops.Count);
+    }
+
+    [Fact]
+    public void Solve_WithoutFixedCost_BothDriversAreUsed()
+    {
+        var scenario = TwoIndependentClusters();
+        scenario.Drivers[1] = scenario.Drivers[1] with { Score = 0m };
+        var unpenalized = CreateSolver(mismatchPenaltyMeters: 0m, fixedCostMeters: 0m);
+
+        var solution = unpenalized.Solve(scenario.Build());
+
+        Assert.NotNull(solution);
+        Assert.Equal(2, solution!.Routes.Count);
+    }
+
+    /// <summary>
+    /// Layout: far driver(0), near driver(1), urgent(2), far deposit(3), near deposit(4). The
+    /// far driver scores 1 and the near one 0, so with penalties on the urgent shipment is worth
+    /// the detour and without them it is not. Cross distances are 1000 so nothing outside a
+    /// driver's own cluster is ever an attractive shortcut.
+    /// </summary>
+    private static (Scenario Scenario, PlanningShipmentData Urgent) ScoreVersusDistanceScenario()
+    {
+        var scenario = new Scenario
+        {
+            Distance =
+            [
+                new long[] { 0, 1000, 400, 10, 1000 },
+                new long[] { 1000, 0, 20, 1000, 10 },
+                new long[] { 400, 20, 0, 20, 20 },
+                new long[] { 10, 1000, 20, 0, 1000 },
+                new long[] { 1000, 10, 20, 1000, 0 }
+            ]
+        };
+
+        scenario.AddDriver(score: 1m);
+        scenario.AddDriver(score: 0m);
+        var urgent = scenario.AddShipment(ShipmentPriorityScoring.UrgentUrgency);
+
+        return (scenario, urgent);
+    }
+
+    /// <summary>
+    /// Two independent clusters, 10 apart within a cluster and 1000 across: driver(0) with its
+    /// shipment(2) and deposit(4), driver(1) with its shipment(3) and deposit(5). Serving both
+    /// shipments with a single vehicle costs about 2500 against 50 for using both, so only the
+    /// fixed cost can make a single vehicle preferable.
+    /// </summary>
+    private static Scenario TwoIndependentClusters()
+    {
+        var scenario = new Scenario
+        {
+            Distance =
+            [
+                new long[] { 0, 1000, 10, 1000, 10, 1000 },
+                new long[] { 1000, 0, 1000, 10, 1000, 10 },
+                new long[] { 10, 1000, 0, 1000, 10, 1000 },
+                new long[] { 1000, 10, 1000, 0, 1000, 10 },
+                new long[] { 10, 1000, 10, 1000, 0, 1000 },
+                new long[] { 1000, 10, 1000, 10, 1000, 0 }
+            ]
+        };
+
+        scenario.AddShipment(ShipmentPriorityScoring.LowUrgency);
+        scenario.AddDriver();
+        scenario.AddShipment(ShipmentPriorityScoring.LowUrgency);
+        scenario.AddDriver();
+
+        return scenario;
     }
 }
