@@ -12,7 +12,10 @@ namespace Infrastructure.RoutePlanning;
 /// The model is built so that no shipment is ever silently dropped: OR-Tools makes every
 /// non-end node mandatory unless a disjunction is declared, and no disjunction is declared
 /// here. A shipment that cannot be served therefore makes the whole problem infeasible and
-/// <see cref="Solve" /> returns null, which the caller surfaces as an explicit failure.
+/// <see cref="Solve" /> comes back with no solution, which the caller surfaces as an explicit
+/// failure. "No solution" is not one thing: <see cref="RoutingSolveOutcome.Failure" /> separates
+/// a proven infeasibility from a search that ran into <see cref="SearchTimeLimitSeconds" />,
+/// because only the first one is a statement about the data.
 /// </remarks>
 public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
 {
@@ -43,7 +46,7 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
         _options = options.Value;
     }
 
-    public VehicleRoutingSolution? Solve(
+    public RoutingSolveOutcome Solve(
         VehicleRoutingProblem problem,
         CancellationToken cancellationToken = default)
     {
@@ -51,7 +54,7 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
 
         if (problem.DriverCount == 0 || problem.ShipmentCount == 0)
         {
-            return null;
+            return RoutingSolveOutcome.Failed(RoutingSolveFailure.InvalidModel);
         }
 
         using var manager = BuildIndexManager(problem);
@@ -66,11 +69,28 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
 
         if (assignment is null)
         {
-            return null;
+            return RoutingSolveOutcome.Failed(TranslateStatus(model.GetStatus()));
         }
 
-        return ReadSolution(problem, model, manager, assignment);
+        return RoutingSolveOutcome.Solved(ReadSolution(problem, model, manager, assignment));
     }
+
+    /// <summary>
+    /// Maps the solver status onto the distinction the caller cares about.
+    /// </summary>
+    /// <remarks>
+    /// OR-Tools reports a search that hit its time limit the same way it reports one that ran to
+    /// completion without ever finding a solution, and neither of them is a proof of
+    /// infeasibility. Only <c>RoutingInfeasible</c> means the constraints were shown to be
+    /// unsatisfiable, so that is the only status allowed to claim the plan cannot be made.
+    /// </remarks>
+    private static RoutingSolveFailure TranslateStatus(RoutingSearchStatus.Types.Value status) => status switch
+    {
+        RoutingSearchStatus.Types.Value.RoutingInfeasible => RoutingSolveFailure.Infeasible,
+        RoutingSearchStatus.Types.Value.RoutingInvalid => RoutingSolveFailure.InvalidModel,
+        RoutingSearchStatus.Types.Value.RoutingFail => RoutingSolveFailure.InvalidModel,
+        _ => RoutingSolveFailure.NoSolutionWithinTimeLimit
+    };
 
     private static RoutingIndexManager BuildIndexManager(VehicleRoutingProblem problem)
     {

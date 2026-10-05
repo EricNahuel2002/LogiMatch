@@ -197,13 +197,16 @@ public class RoutePlanningService : IRoutePlanningService
             horizonSeconds,
             matrix);
 
-        var solution = _solver.Solve(problem, cancellationToken)
-            ?? throw new InvalidOperationException(
-                "No feasible route covers every plannable pending shipment with the selected " +
-                "drivers, vehicles and deposits.");
+        var solution = _solver.Solve(problem, cancellationToken);
+
+        if (solution.Solution is null)
+        {
+            throw new InvalidOperationException(
+                BuildNoSolutionMessage(problem, solution.Failure));
+        }
 
         return new RoutePlanningProposalResponse(
-            solution.Routes
+            solution.Solution.Routes
                 .Select(route => new RouteAssignmentResponse(
                     route.DriverId,
                     route.VehicleId,
@@ -213,11 +216,11 @@ public class RoutePlanningService : IRoutePlanningService
                         .Select(stop => new PlannedStopResponse(stop.ShipmentId, stop.StopOrder))
                         .ToList()))
                 .ToList(),
-            solution.Routes.Select(r => r.DriverId).Distinct().Count(),
-            solution.Routes.Select(r => r.VehicleId).Distinct().Count(),
-            solution.Routes.Sum(r => r.Stops.Count),
-            solution.TotalDistanceMeters,
-            solution.TotalDurationMinutes,
+            solution.Solution.Routes.Select(r => r.DriverId).Distinct().Count(),
+            solution.Solution.Routes.Select(r => r.VehicleId).Distinct().Count(),
+            solution.Solution.Routes.Sum(r => r.Stops.Count),
+            solution.Solution.TotalDistanceMeters,
+            solution.Solution.TotalDurationMinutes,
             excludedShipments,
             eligibility.ExcludedDrivers
                 .Select(d => new ExcludedDriverResponse(
@@ -425,6 +428,69 @@ public class RoutePlanningService : IRoutePlanningService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Explains why the solver came back with no plan, in the same
+    /// "sentence, then reason: detail" shape the exclusion messages use.
+    /// </summary>
+    /// <remarks>
+    /// The generic sentence stays first so callers can keep keying on it, and the diagnosis only
+    /// claims what the failure actually establishes. A search that ran out of time has proven
+    /// nothing, so it does not get a capacity verdict, and an invalid model is reported as a
+    /// defect rather than as an unplannable set of shipments.
+    /// </remarks>
+    private static string BuildNoSolutionMessage(
+        VehicleRoutingProblem problem,
+        RoutingSolveFailure failure)
+    {
+        const string head =
+            "No feasible route covers every plannable pending shipment with the selected " +
+            "drivers, vehicles and deposits.";
+
+        var reason = failure switch
+        {
+            RoutingSolveFailure.NoSolutionWithinTimeLimit =>
+                "No solution was found within the search limit, so infeasibility is not proven.",
+
+            RoutingSolveFailure.InvalidModel =>
+                "The solver rejected the routing model, which points at a defect rather than at " +
+                "the pending shipments.",
+
+            _ => DescribeBindingConstraint(problem)
+        };
+
+        return $"{head} {reason}";
+    }
+
+    /// <summary>
+    /// Names the constraint that leaves the plan short, preferring the one the operator can act on.
+    /// </summary>
+    /// <remarks>
+    /// Fleet capacity is read through the drivers that survived the filter rather than through the
+    /// submitted vehicles, because each driver arrives already paired with its own vehicle: a
+    /// vehicle nobody was selected with is not capacity the solver could use, and counting it would
+    /// hide a shortfall behind a number that cannot be deployed.
+    /// </remarks>
+    private static string DescribeBindingConstraint(VehicleRoutingProblem problem)
+    {
+        var fleetCapacityKg = Enumerable
+            .Range(0, problem.DriverCount)
+            .Select(i => problem.Vehicles[problem.GetVehicleIndex(i)].CapacityKg)
+            .Sum();
+
+        var weightKg = problem.Shipments.Sum(s => s.WeightKg);
+
+        if (fleetCapacityKg < weightKg)
+        {
+            return $"The selected fleet offers {fleetCapacityKg} kg and the {problem.ShipmentCount} " +
+                $"plannable pending shipments weigh {weightKg} kg: {weightKg - fleetCapacityKg} kg short, " +
+                $"so it needs at least one more vehicle of {weightKg - fleetCapacityKg} kg or more.";
+        }
+
+        return $"Capacity is not the limit ({fleetCapacityKg} kg available for {weightKg} kg to be " +
+            $"routed); the {problem.HorizonSeconds / SecondsPerHour} hour horizon and the delivery " +
+            "windows are.";
     }
 
     private static string DescribeExclusions(IReadOnlyList<ExcludedShipmentResponse> excluded) =>

@@ -197,12 +197,16 @@ public class RoutePlanningServiceTests
             .ToList();
 
         _solver.Setup(s => s.Solve(It.IsAny<VehicleRoutingProblem>(), It.IsAny<CancellationToken>()))
-            .Returns(new VehicleRoutingSolution(
+            .Returns(RoutingSolveOutcome.Solved(new VehicleRoutingSolution(
                 [new VehicleRoutePlan(_driverId, _vehicleId, _depositId, 10m, stops)],
                 [],
                 300,
-                90));
+                90)));
     }
+
+    private void ArrangeNoSolution(RoutingSolveFailure failure) =>
+        _solver.Setup(s => s.Solve(It.IsAny<VehicleRoutingProblem>(), It.IsAny<CancellationToken>()))
+            .Returns(RoutingSolveOutcome.Failed(failure));
 
     private static Driver BuildDriver(Guid id, Coordinate? location)
     {
@@ -237,11 +241,12 @@ public class RoutePlanningServiceTests
         Guid id,
         Coordinate? destination = null,
         DateTime? windowStart = null,
-        DateTime? windowEnd = null) =>
+        DateTime? windowEnd = null,
+        decimal weightKg = 10m) =>
         new(
             id,
             ShipmentPriority.Normal,
-            10m,
+            weightKg,
             destination ?? Destination,
             windowStart,
             windowEnd);
@@ -773,13 +778,121 @@ public class RoutePlanningServiceTests
     public async Task PreviewAsync_NoFeasibleSolution_Throws()
     {
         ArrangeValidScenario();
-        _solver.Setup(s => s.Solve(It.IsAny<VehicleRoutingProblem>(), It.IsAny<CancellationToken>()))
-            .Returns((VehicleRoutingProblem _, CancellationToken _) => (VehicleRoutingSolution?)null);
+        ArrangeNoSolution(RoutingSolveFailure.Infeasible);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             CreateService().PreviewAsync(Request));
 
         Assert.Contains("No feasible route", exception.Message);
+    }
+
+    /// <summary>
+    /// A fleet that cannot hold the whole plan is the one failure the operator can act on, so the
+    /// message has to carry the shortfall rather than just saying no.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_FleetTooSmallForTheLoad_NamesTheShortfall()
+    {
+        // Neither shipment fits in the vehicle on its own, so the capacity filter lets the driver
+        // through and the shortfall is only visible once the two loads are added up.
+        ArrangeValidScenario();
+        ArrangeShipments(
+            BuildShipment(_shipmentId, weightKg: 400m),
+            BuildShipment(_otherShipmentId, weightKg: 400m));
+        _vehicles.Setup(v => v.GetManyByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildVehicle(_vehicleId, capacityKg: 500m)]);
+        ArrangeNoSolution(RoutingSolveFailure.Infeasible);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(Request));
+
+        Assert.Contains("No feasible route", exception.Message);
+        Assert.Contains("offers 500 kg", exception.Message);
+        Assert.Contains("weigh 800 kg", exception.Message);
+        Assert.Contains("300 kg short", exception.Message);
+    }
+
+    /// <summary>
+    /// When capacity is not the problem, saying so is what stops the operator from going shopping
+    /// for a truck that would not help.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_CapacityIsEnoughButNoRouteFits_BlamesTheHorizon()
+    {
+        ArrangeValidScenario(
+            BuildShipment(_shipmentId, weightKg: 100m),
+            vehicle: BuildVehicle(_vehicleId, capacityKg: 500m));
+        ArrangeNoSolution(RoutingSolveFailure.Infeasible);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(Request));
+
+        Assert.Contains("Capacity is not the limit", exception.Message);
+        Assert.Contains("500 kg available for 100 kg", exception.Message);
+        Assert.DoesNotContain("kg short", exception.Message);
+    }
+
+    /// <summary>
+    /// A search that ran out of time proves nothing, so it must not be reported as an unplannable
+    /// plan: the capacity arithmetic is exactly the kind of thing that looks conclusive and is not.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_SearchTimedOut_DoesNotClaimThePlanIsImpossible()
+    {
+        ArrangeValidScenario();
+        ArrangeShipments(
+            BuildShipment(_shipmentId, weightKg: 400m),
+            BuildShipment(_otherShipmentId, weightKg: 400m));
+        _vehicles.Setup(v => v.GetManyByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildVehicle(_vehicleId, capacityKg: 500m)]);
+        ArrangeNoSolution(RoutingSolveFailure.NoSolutionWithinTimeLimit);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(Request));
+
+        Assert.Contains("No feasible route", exception.Message);
+        Assert.Contains("infeasibility is not proven", exception.Message);
+        Assert.DoesNotContain("kg short", exception.Message);
+    }
+
+    /// <summary>
+    /// A rejected model is our defect, not a property of the shipments.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_ModelRejected_ReportsADefect()
+    {
+        ArrangeValidScenario();
+        ArrangeNoSolution(RoutingSolveFailure.InvalidModel);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(Request));
+
+        Assert.Contains("rejected the routing model", exception.Message);
+    }
+
+    /// <summary>
+    /// Each driver arrives already paired with its vehicle, so a vehicle nobody was selected with
+    /// is not capacity the solver could have used. Counting it would hide a real shortfall behind
+    /// a bigger number than reality.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_UnusedVehicleCapacityDoesNotCountTowardTheShortfall()
+    {
+        var secondVehicleId = Guid.NewGuid();
+
+        ArrangeValidScenario();
+        ArrangeShipments(
+            BuildShipment(_shipmentId, weightKg: 400m),
+            BuildShipment(_otherShipmentId, weightKg: 400m));
+        _vehicles.Setup(v => v.GetManyByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildVehicle(_vehicleId, capacityKg: 500m), BuildVehicle(secondVehicleId, capacityKg: 5000m)]);
+        ArrangeNoSolution(RoutingSolveFailure.Infeasible);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(Request));
+
+        Assert.Contains("offers 500 kg", exception.Message);
+        Assert.Contains("300 kg short", exception.Message);
     }
 
     [Fact]

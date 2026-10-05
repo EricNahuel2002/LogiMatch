@@ -110,6 +110,22 @@ public class OrToolsVehicleRoutingSolverTests
 
     private static long[] Flatten(long[][] matrix) => matrix.SelectMany(r => r).ToArray();
 
+    /// <summary>
+    /// Unwraps the outcome for the tests that expect a plan. Failing loudly names the reason the
+    /// solver gave instead of letting the assertion complain about a null.
+    /// </summary>
+    private VehicleRoutingSolution Solved(VehicleRoutingProblem problem)
+    {
+        var outcome = _solver.Solve(problem);
+
+        return outcome.Solution
+            ?? throw new InvalidOperationException(
+                $"Expected a solution but the solver reported {outcome.Failure}.");
+    }
+
+    private RoutingSolveFailure FailureOf(VehicleRoutingProblem problem) =>
+        _solver.Solve(problem).Failure;
+
     [Fact]
     public void Solve_SingleDriver_TwoShipments_AssignsBothWithConsecutiveStopOrder()
     {
@@ -118,7 +134,7 @@ public class OrToolsVehicleRoutingSolverTests
         var second = scenario.AddShipment();
         scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         Assert.True(solution!.IsComplete);
@@ -134,7 +150,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddShipment();
         var (driverId, vehicleId, depositId) = scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         var route = Assert.Single(solution!.Routes);
@@ -150,7 +166,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddShipment(weightKg: 80m);
         scenario.AddDriver(capacityKg: 50m);
 
-        Assert.Null(_solver.Solve(scenario.Build()));
+        Assert.Equal(RoutingSolveFailure.Infeasible, FailureOf(scenario.Build()));
     }
 
     [Fact]
@@ -165,7 +181,7 @@ public class OrToolsVehicleRoutingSolverTests
 
         // One driver takes the two 25 kg shipments and the other the 50 kg one, so both
         // vehicles have to be used and the load has to be split.
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         Assert.True(solution!.IsComplete);
@@ -183,7 +199,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddDriver(capacityKg: 50m);
 
         // 90 kg fits in the combined 100 kg, but the 80 kg shipment fits in neither vehicle.
-        Assert.Null(_solver.Solve(scenario.Build()));
+        Assert.Equal(RoutingSolveFailure.Infeasible, FailureOf(scenario.Build()));
     }
 
     [Fact]
@@ -209,7 +225,22 @@ public class OrToolsVehicleRoutingSolverTests
 
         // The window is inside the horizon, but reaching the shipment already takes 20
         // seconds, so it closes before any arrival is possible.
-        Assert.Null(_solver.Solve(scenario.Build()));
+        Assert.Equal(RoutingSolveFailure.Infeasible, FailureOf(scenario.Build()));
+    }
+
+    /// <summary>
+    /// Every failure the solver can report is one the service knows how to explain, so a status
+    /// added upstream cannot fall through to a message with no diagnosis attached.
+    /// </summary>
+    [Fact]
+    public void Solve_EmptyModelIsReportedAsADefectRatherThanAnUnplannablePlan()
+    {
+        // A plan the solver never got to look at is not a plan it could not make, and reporting it
+        // as infeasible would send the operator off to reconfigure the fleet for nothing.
+        var scenario = new Scenario();
+        scenario.AddDriver();
+
+        Assert.NotEqual(RoutingSolveFailure.Infeasible, FailureOf(scenario.Build()));
     }
 
     [Fact]
@@ -219,28 +250,30 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddShipment(window: new TimeWindow(100, 3_000));
         scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         Assert.True(solution!.IsComplete);
     }
 
     [Fact]
-    public void Solve_NoShipments_ReturnsNoSolution()
+    public void Solve_NoShipments_IsRejectedAsAnInvalidModel()
     {
         var scenario = new Scenario();
         scenario.AddDriver();
 
-        Assert.Null(_solver.Solve(scenario.Build()));
+        // Nothing to route is a caller mistake, not a property of the data, so it must not be
+        // reported as an unplannable set of shipments.
+        Assert.Equal(RoutingSolveFailure.InvalidModel, FailureOf(scenario.Build()));
     }
 
     [Fact]
-    public void Solve_NoDrivers_ReturnsNoSolution()
+    public void Solve_NoDrivers_IsRejectedAsAnInvalidModel()
     {
         var scenario = new Scenario();
         scenario.AddShipment();
 
-        Assert.Null(_solver.Solve(scenario.Build()));
+        Assert.Equal(RoutingSolveFailure.InvalidModel, FailureOf(scenario.Build()));
     }
 
     [Fact]
@@ -253,7 +286,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddDriver(depositId: depositId);
         scenario.AddDriver(depositId: depositId);
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         Assert.True(solution!.IsComplete);
@@ -285,7 +318,7 @@ public class OrToolsVehicleRoutingSolverTests
         var urgent = scenario.AddShipment(ShipmentPriorityScoring.UrgentUrgency);
         scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         var route = Assert.Single(solution!.Routes);
@@ -301,7 +334,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddShipment(ShipmentPriorityScoring.LowUrgency);
         scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         // Layout: driver(0), s0(1), s1(2), deposit(3). Ring distances are 20 per adjacent step,
@@ -318,7 +351,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddShipment(weightKg: 7.25m);
         scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         Assert.Equal(19.75m, Assert.Single(solution!.Routes).LoadKg);
@@ -342,7 +375,7 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.AddShipment();
         scenario.AddDriver();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         Assert.True(solution!.IsComplete);
@@ -359,7 +392,7 @@ public class OrToolsVehicleRoutingSolverTests
     {
         var (scenario, _) = ScoreVersusDistanceScenario();
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         var route = Assert.Single(solution!.Routes);
@@ -376,10 +409,10 @@ public class OrToolsVehicleRoutingSolverTests
         var (scenario, urgent) = ScoreVersusDistanceScenario();
         var unpenalized = CreateSolver(mismatchPenaltyMeters: 0m, fixedCostMeters: 0m);
 
-        var solution = unpenalized.Solve(scenario.Build());
+        var outcome = unpenalized.Solve(scenario.Build());
 
-        Assert.NotNull(solution);
-        var route = Assert.Single(solution!.Routes);
+        Assert.NotNull(outcome.Solution);
+        var route = Assert.Single(outcome.Solution!.Routes);
         Assert.Equal(scenario.Drivers[1].DriverId, route.DriverId);
         Assert.Equal(urgent.ShipmentId, Assert.Single(route.Stops).ShipmentId);
     }
@@ -394,7 +427,7 @@ public class OrToolsVehicleRoutingSolverTests
         var scenario = TwoIndependentClusters();
         scenario.Drivers[1] = scenario.Drivers[1] with { Score = 0m };
 
-        var solution = _solver.Solve(scenario.Build());
+        var solution = Solved(scenario.Build());
 
         Assert.NotNull(solution);
         var route = Assert.Single(solution!.Routes);
@@ -409,10 +442,10 @@ public class OrToolsVehicleRoutingSolverTests
         scenario.Drivers[1] = scenario.Drivers[1] with { Score = 0m };
         var unpenalized = CreateSolver(mismatchPenaltyMeters: 0m, fixedCostMeters: 0m);
 
-        var solution = unpenalized.Solve(scenario.Build());
+        var outcome = unpenalized.Solve(scenario.Build());
 
-        Assert.NotNull(solution);
-        Assert.Equal(2, solution!.Routes.Count);
+        Assert.NotNull(outcome.Solution);
+        Assert.Equal(2, outcome.Solution!.Routes.Count);
     }
 
     /// <summary>
