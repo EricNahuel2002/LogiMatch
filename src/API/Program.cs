@@ -55,6 +55,7 @@ builder.Services
     .AddPolicy(Policies.DriverOnly, policy => policy.RequireRole("Driver"));
 
 builder.Services.AddControllers();
+builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
@@ -145,6 +146,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
+app.UseCors(CorsExtensions.FrontendPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
