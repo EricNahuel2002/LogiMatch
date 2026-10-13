@@ -8,5 +8,9 @@ public interface IOrderRepository
 
     Task<Order?> GetByIdWithItemsAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Order>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<Order?> GetByIdWithFullDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task AddAsync(Order order, CancellationToken cancellationToken = default);
 }

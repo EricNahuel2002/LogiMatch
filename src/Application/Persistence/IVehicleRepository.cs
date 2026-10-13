@@ -13,4 +13,6 @@ public interface IVehicleRepository
     Task<IReadOnlyList<Vehicle>> GetManyByIdsAsync(
         IReadOnlyCollection<Guid> ids,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Vehicle>> GetAllAsync(CancellationToken cancellationToken = default);
 }

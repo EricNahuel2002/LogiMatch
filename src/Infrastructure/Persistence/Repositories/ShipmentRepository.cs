@@ -157,6 +157,44 @@ public class ShipmentRepository : IShipmentRepository
             .ToList();
     }
 
+    public async Task<IReadOnlyList<Shipment>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _db.Shipments
+            .Include(s => s.Order)
+            .Include(s => s.RouteStop)
+            .OrderByDescending(s => s.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Shipment?> GetByIdWithFullDetailsAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _db.Shipments
+            .Include(s => s.Order)
+                .ThenInclude(o => o.Items)
+            .Include(s => s.Order)
+                .ThenInclude(o => o.AssignedDriver)
+            .Include(s => s.RouteStop)
+            .Include(s => s.DeliveryAttempts)
+            .Include(s => s.History)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ShipmentHistory>> GetHistoryAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        return await _db.ShipmentHistory
+            .Where(h => h.ShipmentId == shipmentId)
+            .OrderByDescending(h => h.RecordedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DeliveryAttempt>> GetDeliveryAttemptsAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        return await _db.DeliveryAttempts
+            .Where(d => d.ShipmentId == shipmentId)
+            .OrderByDescending(d => d.AttemptedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default)
     {
         await _db.Shipments.AddAsync(shipment, cancellationToken);

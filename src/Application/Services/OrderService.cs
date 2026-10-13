@@ -87,4 +87,38 @@ public class OrderService : IOrderService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<OrderSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var orders = await _orders.GetAllAsync(cancellationToken);
+
+        return orders.Select(o => new OrderSummaryDto(
+            o.Id,
+            o.CustomerId,
+            o.AssignedDriverId,
+            o.DeliveryWindowStartAt,
+            o.DeliveryWindowEndAt,
+            o.CreatedAt,
+            o.UpdatedAt)).ToList();
+    }
+
+    public async Task<OrderDetailsDto?> GetByIdAsync(Guid orderId, CancellationToken cancellationToken = default)
+    {
+        var order = await _orders.GetByIdWithFullDetailsAsync(orderId, cancellationToken);
+
+        if (order is null)
+        {
+            return null;
+        }
+
+        return new OrderDetailsDto(
+            order.Id,
+            order.CustomerId,
+            order.AssignedDriverId,
+            order.DeliveryWindowStartAt,
+            order.DeliveryWindowEndAt,
+            order.Items.Select(i => new OrderItemDto(i.Id, i.Name, i.Price, i.Quantity, i.WeightKg)).ToArray(),
+            order.CreatedAt,
+            order.UpdatedAt);
+    }
 }

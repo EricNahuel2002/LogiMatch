@@ -18,6 +18,9 @@ public static class DependencyInjection
         services.AddScoped<IRouteService, RouteService>();
         services.AddScoped<IRouteStopService, RouteStopService>();
         services.AddScoped<IDriverService, DriverService>();
+        services.AddScoped<IVehicleService, VehicleService>();
+        services.AddScoped<IDepositService, DepositService>();
+        services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<IDelayRiskService, DelayRiskService>();
         services.AddScoped<IRoutePlanningService, RoutePlanningService>();
 

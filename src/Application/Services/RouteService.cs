@@ -13,23 +13,29 @@ public class RouteService : IRouteService
     private readonly IRouteStopRepository _routeStops;
     private readonly IUserRepository _users;
     private readonly IVehicleRepository _vehicles;
+    private readonly IDepositRepository _deposits;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IValidator<CreateRouteRequest> _createRouteValidator;
+    private readonly IValidator<CommitFromProposalRequest> _commitFromProposalValidator;
 
     public RouteService(
         IRouteRepository routes,
         IRouteStopRepository routeStops,
         IUserRepository users,
         IVehicleRepository vehicles,
+        IDepositRepository deposits,
         IUnitOfWork unitOfWork,
-        IValidator<CreateRouteRequest> createRouteValidator)
+        IValidator<CreateRouteRequest> createRouteValidator,
+        IValidator<CommitFromProposalRequest> commitFromProposalValidator)
     {
         _routes = routes;
         _routeStops = routeStops;
         _users = users;
         _vehicles = vehicles;
+        _deposits = deposits;
         _unitOfWork = unitOfWork;
         _createRouteValidator = createRouteValidator;
+        _commitFromProposalValidator = commitFromProposalValidator;
     }
 
     public async Task<Guid> CreateAsync(CreateRouteRequest request, CancellationToken cancellationToken = default)
@@ -79,6 +85,97 @@ public class RouteService : IRouteService
         route.AddStop(routeStop);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<RouteSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var routes = await _routes.GetAllAsync(cancellationToken);
+
+        return routes.Select(r => new RouteSummaryDto(
+            r.Id,
+            r.IsActive,
+            r.CancellationReason,
+            r.VehicleId,
+            r.DriverId,
+            r.CreatedAt,
+            r.UpdatedAt)).ToList();
+    }
+
+    public async Task<RouteDetailsDto?> GetByIdAsync(Guid routeId, CancellationToken cancellationToken = default)
+    {
+        var r = await _routes.GetByIdWithStopsAsync(routeId, cancellationToken);
+
+        if (r is null)
+        {
+            return null;
+        }
+
+        return new RouteDetailsDto(
+            r.Id,
+            r.IsActive,
+            r.CancellationReason,
+            r.VehicleId,
+            r.DriverId,
+            r.Origin,
+            r.RouteStops.OrderBy(s => s.StopOrder).Select(ToStopSummary).ToArray(),
+            r.CreatedAt,
+            r.UpdatedAt);
+    }
+
+    public async Task<CommitFromProposalResponse> CommitFromProposalAsync(CommitFromProposalRequest request, CancellationToken cancellationToken = default)
+    {
+        await _commitFromProposalValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+        var committed = new List<CommittedRouteDto>();
+
+        foreach (var assignment in request.Assignments)
+        {
+            var deposit = await _deposits.GetByIdAsync(assignment.DepositId, cancellationToken)
+                ?? throw new NotFoundException(nameof(Deposit), assignment.DepositId);
+
+            var driver = await _users.GetDriverByIdAsync(assignment.DriverId, cancellationToken)
+                ?? throw new NotFoundException(nameof(Driver), assignment.DriverId);
+
+            var vehicle = await _vehicles.GetByIdAsync(assignment.VehicleId, cancellationToken)
+                ?? throw new NotFoundException(nameof(Vehicle), assignment.VehicleId);
+
+            var route = Route.Create(deposit.Coordinate);
+            route.AssignDriver(driver);
+            route.AssignVehicle(vehicle);
+
+            var routeStopIds = new List<Guid>();
+
+            foreach (var stop in assignment.Stops.OrderBy(s => s.StopOrder))
+            {
+                var routeStop = await _routeStops.GetByShipmentIdAsync(stop.ShipmentId, cancellationToken)
+                    ?? throw new NotFoundException(nameof(RouteStop), stop.ShipmentId);
+
+                routeStop.AssignToRoute(route);
+                route.AddStop(routeStop);
+                routeStopIds.Add(routeStop.Id);
+            }
+
+            await _routes.AddAsync(route, cancellationToken);
+            committed.Add(new CommittedRouteDto(route.Id, driver.Id, routeStopIds.ToArray()));
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new CommitFromProposalResponse(committed.ToArray());
+    }
+
+    private static RouteStopSummaryDto ToStopSummary(RouteStop s)
+    {
+        return new RouteStopSummaryDto(
+            s.Id,
+            s.RouteId ?? Guid.Empty,
+            s.ShipmentId,
+            s.Name,
+            s.StopOrder,
+            s.Coordinate.Latitude,
+            s.Coordinate.Longitude,
+            s.DistanceMeters,
+            s.TollCost);
     }
 
     private async Task<Route> GetRouteAsync(Guid routeId, CancellationToken cancellationToken)

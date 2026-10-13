@@ -27,5 +27,13 @@ public interface IShipmentRepository
     Task<IReadOnlyList<ShipmentPlanningData>> GetPendingWithPlanningDetailsAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Shipment>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<Shipment?> GetByIdWithFullDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ShipmentHistory>> GetHistoryAsync(Guid shipmentId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DeliveryAttempt>> GetDeliveryAttemptsAsync(Guid shipmentId, CancellationToken cancellationToken = default);
+
     Task AddAsync(Shipment shipment, CancellationToken cancellationToken = default);
 }

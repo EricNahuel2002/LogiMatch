@@ -42,6 +42,22 @@ public class RouteRepository : IRouteRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Route>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _db.Routes
+            .Include(r => r.RouteStops)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<Route?> GetByIdWithStopsAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return _db.Routes
+            .Include(r => r.RouteStops)
+                .ThenInclude(rs => rs.Shipment)
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    }
+
     public async Task AddAsync(Route route, CancellationToken cancellationToken = default)
     {
         await _db.Routes.AddAsync(route, cancellationToken);

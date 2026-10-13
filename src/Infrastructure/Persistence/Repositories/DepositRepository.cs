@@ -18,6 +18,12 @@ public class DepositRepository : IDepositRepository
     {
         return await _db.Deposits
             .AsNoTracking()
+            .OrderBy(d => d.Address)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<Deposit?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return _db.Deposits.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
     }
 }

@@ -18,6 +18,11 @@ public class RouteStopRepository : IRouteStopRepository
         return _db.RouteStops.FirstOrDefaultAsync(rs => rs.Id == id, cancellationToken);
     }
 
+    public Task<RouteStop?> GetByShipmentIdAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        return _db.RouteStops.FirstOrDefaultAsync(rs => rs.ShipmentId == shipmentId, cancellationToken);
+    }
+
     public async Task AddAsync(RouteStop routeStop, CancellationToken cancellationToken = default)
     {
         await _db.RouteStops.AddAsync(routeStop, cancellationToken);

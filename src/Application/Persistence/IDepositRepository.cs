@@ -10,4 +10,6 @@ public interface IDepositRepository
     /// </summary>
     Task<IReadOnlyList<Deposit>> GetAllAsync(
         CancellationToken cancellationToken = default);
+
+    Task<Deposit?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }

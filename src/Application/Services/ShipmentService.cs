@@ -168,6 +168,87 @@ public class ShipmentService : IShipmentService
             ?? throw new NotFoundException(nameof(RouteStop), id);
     }
 
+    public async Task<IReadOnlyList<ShipmentSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var shipments = await _shipments.GetAllAsync(cancellationToken);
+
+        return shipments.Select(s => new ShipmentSummaryDto(
+            s.Id,
+            s.Status,
+            s.Priority,
+            s.DelayRiskPercentage,
+            s.OrderId,
+            s.Order?.AssignedDriverId,
+            s.RouteStop?.Id,
+            s.RouteStop?.RouteId,
+            s.CreatedAt,
+            s.UpdatedAt)).ToList();
+    }
+
+    public async Task<ShipmentDetailsDto?> GetByIdAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        var s = await _shipments.GetByIdWithFullDetailsAsync(shipmentId, cancellationToken);
+
+        if (s is null)
+        {
+            return null;
+        }
+
+        return new ShipmentDetailsDto(
+            s.Id,
+            s.Status,
+            s.Priority,
+            s.DelayRiskPercentage,
+            s.ArrivedAtDestination,
+            s.OrderId,
+            s.Order.Items.Select(i => new ShipmentOrderItemDto(i.Id, i.Name, i.Quantity, i.WeightKg)).ToArray(),
+            s.RouteStop is null
+                ? null
+                : new ShipmentRouteStopDto(
+                    s.RouteStop.Id,
+                    s.RouteStop.StopOrder,
+                    s.RouteStop.RouteId,
+                    s.RouteStop.Name,
+                    s.RouteStop.Coordinate.Latitude,
+                    s.RouteStop.Coordinate.Longitude,
+                    s.RouteStop.DistanceMeters,
+                    s.RouteStop.TollCost),
+            s.Order.AssignedDriver is null
+                ? null
+                : new ShipmentDriverDto(s.Order.AssignedDriver.Id, s.Order.AssignedDriver.Name, s.Order.AssignedDriver.Surname),
+            s.CreatedAt,
+            s.UpdatedAt);
+    }
+
+    public async Task<IReadOnlyList<ShipmentHistoryDto>> GetHistoryAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        var history = await _shipments.GetHistoryAsync(shipmentId, cancellationToken);
+
+        return history.Select(h => new ShipmentHistoryDto(
+            h.Id,
+            h.ShipmentId,
+            h.Status,
+            h.RouteStopId,
+            h.Note,
+            h.RecordedAt)).ToList();
+    }
+
+    public async Task<IReadOnlyList<DeliveryAttemptDto>> GetDeliveryAttemptsAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    {
+        var attempts = await _shipments.GetDeliveryAttemptsAsync(shipmentId, cancellationToken);
+
+        return attempts.Select(d => new DeliveryAttemptDto(
+            d.Id,
+            d.ShipmentId,
+            d.OrderId,
+            d.RouteStopId,
+            d.AttemptNumber,
+            d.AttemptedAt,
+            d.Succeeded,
+            d.FailureReason,
+            d.Note)).ToList();
+    }
+
     private static ShipmentDelayRiskResponse ToDelayRiskResponse(Shipment shipment)
     {
         var driver = shipment.RouteStop?.Route?.Driver ?? shipment.Order.AssignedDriver;

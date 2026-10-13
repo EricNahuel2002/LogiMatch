@@ -11,4 +11,10 @@ public interface IRouteService
     Task AssignVehicleAsync(Guid routeId, Guid vehicleId, CancellationToken cancellationToken = default);
 
     Task AddStopAsync(Guid routeId, Guid routeStopId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<RouteSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<RouteDetailsDto?> GetByIdAsync(Guid routeId, CancellationToken cancellationToken = default);
+
+    Task<CommitFromProposalResponse> CommitFromProposalAsync(CommitFromProposalRequest request, CancellationToken cancellationToken = default);
 }

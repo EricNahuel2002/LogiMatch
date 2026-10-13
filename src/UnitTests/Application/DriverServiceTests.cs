@@ -16,6 +16,7 @@ public class DriverServiceTests
     private readonly Mock<IUserRepository> _users = new();
     private readonly Mock<IRouteRepository> _routes = new();
     private readonly Mock<IRouteStopRepository> _routeStops = new();
+    private readonly Mock<IShipmentRepository> _shipments = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<IEmailSender> _emailSender = new();
     private readonly Mock<IShipmentPriorityAssignmentService> _priorityAssignment = new();
@@ -30,6 +31,7 @@ public class DriverServiceTests
             _users.Object,
             _routes.Object,
             _routeStops.Object,
+            _shipments.Object,
             _unitOfWork.Object,
             _emailSender.Object,
             _priorityAssignment.Object,

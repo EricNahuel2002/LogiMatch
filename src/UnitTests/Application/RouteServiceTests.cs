@@ -14,9 +14,12 @@ public class RouteServiceTests
     private readonly Mock<IRouteStopRepository> _routeStops = new();
     private readonly Mock<IUserRepository> _users = new();
     private readonly Mock<IVehicleRepository> _vehicles = new();
+    private readonly Mock<IDepositRepository> _deposits = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<IValidator<CreateRouteRequest>> _createRouteValidator =
         FluentValidationMocks.AlwaysValid<CreateRouteRequest>();
+    private readonly Mock<IValidator<CommitFromProposalRequest>> _commitFromProposalValidator =
+        FluentValidationMocks.AlwaysValid<CommitFromProposalRequest>();
 
     private RouteService CreateService()
     {
@@ -25,8 +28,10 @@ public class RouteServiceTests
             _routeStops.Object,
             _users.Object,
             _vehicles.Object,
+            _deposits.Object,
             _unitOfWork.Object,
-            _createRouteValidator.Object);
+            _createRouteValidator.Object,
+            _commitFromProposalValidator.Object);
     }
 
     private static Shipment BuildPendingShipment()

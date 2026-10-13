@@ -11,5 +11,9 @@ public interface IRouteRepository
     Task<IReadOnlyList<Route>> GetActiveRoutesForDelayRiskAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Route>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<Route?> GetByIdWithStopsAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task AddAsync(Route route, CancellationToken cancellationToken = default);
 }

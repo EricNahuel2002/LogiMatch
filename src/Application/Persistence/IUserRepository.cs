@@ -38,4 +38,8 @@ public interface IUserRepository
         DateTime dayStartUtc,
         DateTime dayEndUtc,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Driver>> GetAllDriversAsync(CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Customer>> GetAllCustomersAsync(CancellationToken cancellationToken = default);
 }

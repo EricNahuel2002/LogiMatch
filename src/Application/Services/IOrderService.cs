@@ -9,4 +9,8 @@ public interface IOrderService
     Task AddItemAsync(Guid orderId, CreateOrderItemRequest request, CancellationToken cancellationToken = default);
 
     Task AssignDriverAsync(Guid orderId, AssignOrderDriverRequest request, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OrderSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<OrderDetailsDto?> GetByIdAsync(Guid orderId, CancellationToken cancellationToken = default);
 }

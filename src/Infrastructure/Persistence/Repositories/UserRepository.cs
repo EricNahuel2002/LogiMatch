@@ -192,4 +192,20 @@ public class UserRepository : IUserRepository
 
         return results;
     }
+
+    public async Task<IReadOnlyList<Driver>> GetAllDriversAsync(CancellationToken cancellationToken = default)
+    {
+        return await _db.Users.OfType<Driver>()
+            .AsNoTracking()
+            .OrderBy(d => d.Surname).ThenBy(d => d.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Customer>> GetAllCustomersAsync(CancellationToken cancellationToken = default)
+    {
+        return await _db.Users.OfType<Customer>()
+            .AsNoTracking()
+            .OrderBy(c => c.Name)
+            .ToListAsync(cancellationToken);
+    }
 }

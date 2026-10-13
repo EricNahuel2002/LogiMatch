@@ -49,4 +49,28 @@ public sealed class RoutesController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    {
+        var routes = await _routeService.GetAllAsync(cancellationToken);
+
+        return Ok(routes);
+    }
+
+    [HttpGet("{routeId:guid}")]
+    public async Task<IActionResult> GetById(Guid routeId, CancellationToken cancellationToken)
+    {
+        var route = await _routeService.GetByIdAsync(routeId, cancellationToken);
+
+        return route is null ? NotFound() : Ok(route);
+    }
+
+    [HttpPost("commit-from-proposal")]
+    public async Task<IActionResult> CommitFromProposal(CommitFromProposalRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _routeService.CommitFromProposalAsync(request, cancellationToken);
+
+        return Ok(result);
+    }
 }

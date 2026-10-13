@@ -23,4 +23,12 @@ public interface IShipmentService
         Guid shipmentId,
         RegisterDeliveryAttemptRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ShipmentSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<ShipmentDetailsDto?> GetByIdAsync(Guid shipmentId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ShipmentHistoryDto>> GetHistoryAsync(Guid shipmentId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DeliveryAttemptDto>> GetDeliveryAttemptsAsync(Guid shipmentId, CancellationToken cancellationToken = default);
 }

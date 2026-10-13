@@ -1,7 +1,7 @@
-using Api.Authorization;
 using Application.Dtos.Shipments;
 using Application.Services;
 using Microsoft.AspNetCore.Authorization;
+using Api.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
@@ -28,6 +28,42 @@ public sealed class ShipmentsController : ControllerBase
         var shipments = await _shipmentService.GetPendingWithDelayRiskAsync(cancellationToken);
 
         return Ok(shipments);
+    }
+
+    [HttpGet]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    {
+        var shipments = await _shipmentService.GetAllAsync(cancellationToken);
+
+        return Ok(shipments);
+    }
+
+    [HttpGet("{shipmentId:guid}")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<IActionResult> GetById(Guid shipmentId, CancellationToken cancellationToken)
+    {
+        var shipment = await _shipmentService.GetByIdAsync(shipmentId, cancellationToken);
+
+        return shipment is null ? NotFound() : Ok(shipment);
+    }
+
+    [HttpGet("{shipmentId:guid}/history")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<IActionResult> GetHistory(Guid shipmentId, CancellationToken cancellationToken)
+    {
+        var history = await _shipmentService.GetHistoryAsync(shipmentId, cancellationToken);
+
+        return Ok(history);
+    }
+
+    [HttpGet("{shipmentId:guid}/delivery-attempts")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<IActionResult> GetDeliveryAttempts(Guid shipmentId, CancellationToken cancellationToken)
+    {
+        var attempts = await _shipmentService.GetDeliveryAttemptsAsync(shipmentId, cancellationToken);
+
+        return Ok(attempts);
     }
 
     [HttpPost]

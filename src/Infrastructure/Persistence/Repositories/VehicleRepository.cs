@@ -29,4 +29,12 @@ public class VehicleRepository : IVehicleRepository
             .Where(v => ids.Contains(v.Id))
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<Vehicle>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _db.Vehicles
+            .AsNoTracking()
+            .OrderBy(v => v.LicensePlate)
+            .ToListAsync(cancellationToken);
+    }
 }

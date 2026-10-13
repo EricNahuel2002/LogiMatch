@@ -41,4 +41,20 @@ public sealed class OrdersController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    {
+        var orders = await _orderService.GetAllAsync(cancellationToken);
+
+        return Ok(orders);
+    }
+
+    [HttpGet("{orderId:guid}")]
+    public async Task<IActionResult> GetById(Guid orderId, CancellationToken cancellationToken)
+    {
+        var order = await _orderService.GetByIdAsync(orderId, cancellationToken);
+
+        return order is null ? NotFound() : Ok(order);
+    }
 }

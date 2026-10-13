@@ -14,6 +14,7 @@ public class DriverService : IDriverService
     private readonly IUserRepository _users;
     private readonly IRouteRepository _routes;
     private readonly IRouteStopRepository _routeStops;
+    private readonly IShipmentRepository _shipments;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEmailSender _emailSender;
     private readonly IShipmentPriorityAssignmentService _priorityAssignment;
@@ -24,6 +25,7 @@ public class DriverService : IDriverService
         IUserRepository users,
         IRouteRepository routes,
         IRouteStopRepository routeStops,
+        IShipmentRepository shipments,
         IUnitOfWork unitOfWork,
         IEmailSender emailSender,
         IShipmentPriorityAssignmentService priorityAssignment,
@@ -33,11 +35,36 @@ public class DriverService : IDriverService
         _users = users;
         _routes = routes;
         _routeStops = routeStops;
+        _shipments = shipments;
         _unitOfWork = unitOfWork;
         _emailSender = emailSender;
         _priorityAssignment = priorityAssignment;
         _updateLocationValidator = updateLocationValidator;
         _cancelRouteValidator = cancelRouteValidator;
+    }
+
+    public async Task<IReadOnlyList<DriverSummaryDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var drivers = await _users.GetAllDriversAsync(cancellationToken);
+        return drivers.Select(d => new DriverSummaryDto(d.Id, d.Name, d.Surname, d.Email, d.PhoneNumber)).ToList();
+    }
+
+    public async Task<DriverRouteCurrentDto?> GetCurrentRouteAsync(Guid driverId, CancellationToken cancellationToken = default)
+    {
+        var route = await _routes.GetActiveByDriverIdAsync(driverId, cancellationToken);
+        if (route is null)
+        {
+            return null;
+        }
+        return new DriverRouteCurrentDto(route.Id, route.IsActive, route.VehicleId, route.CreatedAt);
+    }
+
+    public async Task<IReadOnlyList<DriverShipmentDto>> GetShipmentsAsync(Guid driverId, CancellationToken cancellationToken = default)
+    {
+        var shipments = await _shipments.GetAssignedWithHistoryAsync(cancellationToken);
+        return shipments.Where(s => s.Order.AssignedDriverId == driverId)
+            .Select(s => new DriverShipmentDto(s.Id, s.Status, s.Priority, s.OrderId, s.CreatedAt))
+            .ToList();
     }
 
     public async Task UpdateLocationAsync(
