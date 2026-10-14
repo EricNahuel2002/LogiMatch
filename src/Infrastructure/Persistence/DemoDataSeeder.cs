@@ -49,6 +49,7 @@ public static class DemoDataSeeder
     {
         var db = services.GetRequiredService<LogiMatchDbContext>();
         var userManager = services.GetRequiredService<UserManager<User>>();
+        var timeProvider = services.GetRequiredService<TimeProvider>();
 
         var credential = password ?? DefaultPassword;
 
@@ -193,7 +194,9 @@ public static class DemoDataSeeder
             var shipments = new List<Shipment>();
             var routes = new List<Route>();
 
-            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ArgentinaTimeZone);
+            var nowLocal = TimeZoneInfo
+                .ConvertTime(timeProvider.GetUtcNow(), ArgentinaTimeZone)
+                .DateTime;
 
 var (targetShipment, _, targetRoute) = BuildShipment(
                 customer, admin, null,
@@ -243,7 +246,7 @@ var (targetShipment, _, targetRoute) = BuildShipment(
                 deliveredStop,
                 succeeded: true,
                 note: "Entregado al cliente",
-                attemptedAt: DateTime.UtcNow);
+                attemptedAt: timeProvider.GetUtcNow().UtcDateTime.AddMinutes(-30));
             shipments.Add(delivered);
             routes.Add(route4);
 

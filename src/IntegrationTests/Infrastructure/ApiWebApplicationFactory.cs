@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace IntegrationTests.Infrastructure;
 
@@ -20,6 +21,23 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
     public const string DriverEmail = "chofer1@logimatch.com";
     public const string UsersPassword = "LogiMatch#2026";
     private const string TestSecret = "IntegrationTestSecretKey-0123456789abcdef!";
+
+    private static readonly TimeZoneInfo ArgentinaTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("America/Argentina/Buenos_Aires");
+
+    /// <summary>
+    /// Application clock frozen at a fixed instant (14:00 in Argentina) so time-dependent
+    /// behavior does not depend on the runner's time zone.
+    /// </summary>
+    public FixedTimeProvider Clock { get; } =
+        new(new DateTimeOffset(2026, 3, 10, 17, 0, 0, TimeSpan.Zero));
+
+    /// <summary>
+    /// The frozen local wall-clock time of the depot. Tests build delivery windows against it so
+    /// they line up with the horizon computed by the application.
+    /// </summary>
+    public DateTime ArgentinaNow =>
+        TimeZoneInfo.ConvertTime(Clock.GetUtcNow(), ArgentinaTimeZone).DateTime;
 
     public RecordingEmailSender EmailRecorder { get; } = new();
     public RecordingGeocodingClient Geocoding { get; } = new();
@@ -58,6 +76,9 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(Clock);
+
             services.AddSingleton<IEmailSender>(EmailRecorder);
             services.AddSingleton<IGeocodingClient>(Geocoding);
             services.AddSingleton<IRouteClient>(RouteMetrics);

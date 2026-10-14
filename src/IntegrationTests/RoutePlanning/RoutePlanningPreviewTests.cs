@@ -487,8 +487,8 @@ public class RoutePlanningPreviewTests
         var elapsed = await TestDataBuilder.CreatePendingShipmentWithStopAsync(
             arrange.Db,
             [OrderItem.Create("Caja", 10m, 1, 4m)],
-            deliveryWindowStartAt: DateTime.Now.AddHours(-6),
-            deliveryWindowEndAt: DateTime.Now.AddHours(-2));
+            deliveryWindowStartAt: _fixture.Factory.ArgentinaNow.AddHours(-6),
+            deliveryWindowEndAt: _fixture.Factory.ArgentinaNow.AddHours(-2));
 
         var parked = await ParkForeignPendingShipmentsAsync(arranged.Shipment.Id, elapsed.Id);
 
@@ -526,8 +526,8 @@ public class RoutePlanningPreviewTests
         var beyond = await TestDataBuilder.CreatePendingShipmentWithStopAsync(
             arrange.Db,
             [OrderItem.Create("Caja", 10m, 1, 4m)],
-            deliveryWindowStartAt: DateTime.Now.AddHours(20),
-            deliveryWindowEndAt: DateTime.Now.AddHours(22));
+            deliveryWindowStartAt: _fixture.Factory.ArgentinaNow.AddHours(20),
+            deliveryWindowEndAt: _fixture.Factory.ArgentinaNow.AddHours(22));
 
         var parked = await ParkForeignPendingShipmentsAsync(arranged.Shipment.Id, beyond.Id);
 
