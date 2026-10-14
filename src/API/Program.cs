@@ -157,7 +157,8 @@ if (hangfireEnabled)
         app.UseHangfireDashboard("/hangfire");
     }
 
-    RecurringJob.AddOrUpdate<IDelayRiskService>(
+    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate<IDelayRiskService>(
         "delay-risk-recalculation",
         service => service.ExecuteRecalculationAsync(CancellationToken.None),
         Cron.MinuteInterval(10));

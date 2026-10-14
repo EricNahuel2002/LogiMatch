@@ -49,3 +49,29 @@ export function priorityLabel(priority: string) {
 export function priorityTone(priority: string): BadgeTone {
   return priorityTones[priority] ?? 'neutral';
 }
+
+const deliveryFailureReasonLabels: Record<string, string> = {
+  CustomerAbsent: 'Cliente ausente',
+  Refused: 'Rechazado',
+  BusinessClosed: 'Comercio cerrado',
+  Other: 'Otro',
+};
+
+export function deliveryFailureReasonLabel(reason?: string | null) {
+  if (!reason) return '-';
+  return deliveryFailureReasonLabels[reason] ?? reason;
+}
+
+export const shipmentStatusOptions = Object.entries(statusLabels).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+export const shipmentPriorityOptions = Object.entries(priorityLabels).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+export const deliveryFailureReasonOptions = Object.entries(deliveryFailureReasonLabels).map(
+  ([value, label]) => ({ value, label }),
+);

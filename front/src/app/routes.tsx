@@ -2,8 +2,11 @@
 import LoginPage from '@/features/auth/LoginPage';
 import AdminDashboard from '@/features/admin/dashboard/AdminDashboard';
 import OrdersPage from '@/features/admin/orders/OrdersPage';
+import OrderDetailPage from '@/features/admin/orders/OrderDetailPage';
 import ShipmentsPage from '@/features/admin/shipments/ShipmentsPage';
+import ShipmentDetailPage from '@/features/admin/shipments/ShipmentDetailPage';
 import RoutesPage from '@/features/admin/routes/RoutesPage';
+import RouteDetailPage from '@/features/admin/routes/RouteDetailPage';
 import RoutePlanningPage from '@/features/admin/route-planning/RoutePlanningPage';
 import ShipmentAssignPage from '@/features/admin/shipments/ShipmentAssignPage';
 import DriverHome from '@/features/driver/home/DriverHome';
@@ -29,9 +32,12 @@ export default function AppRoutes() {
         <Route element={<AppShell />}>
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/orders" element={<OrdersPage />} />
+          <Route path="/admin/orders/:id" element={<OrderDetailPage />} />
           <Route path="/admin/shipments" element={<ShipmentsPage />} />
+          <Route path="/admin/shipments/:id" element={<ShipmentDetailPage />} />
           <Route path="/admin/shipments/:id/assign" element={<ShipmentAssignPage />} />
           <Route path="/admin/routes" element={<RoutesPage />} />
+          <Route path="/admin/routes/:id" element={<RouteDetailPage />} />
           <Route path="/admin/route-planning" element={<RoutePlanningPage />} />
         </Route>
       </Route>

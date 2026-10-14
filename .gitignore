@@ -6,3 +6,6 @@ TestResults/
 
 # Contexto de código para agentes (no versionar)
 docs/context.md
+
+# Script local de arranque (no versionar)
+iniciar.cmd
