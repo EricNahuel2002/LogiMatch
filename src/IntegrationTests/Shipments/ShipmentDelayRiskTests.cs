@@ -54,7 +54,7 @@ public class ShipmentDelayRiskTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<ShipmentDelayRiskResponse>>();
+        var body = await response.Content.ReadJsonAsync<List<ShipmentDelayRiskResponse>>();
         Assert.NotNull(body);
 
         var result = body!.Single(s => s.ShipmentId == shipment.Id);
@@ -96,7 +96,7 @@ public class ShipmentDelayRiskTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<ShipmentDelayRiskResponse>>();
+        var body = await response.Content.ReadJsonAsync<List<ShipmentDelayRiskResponse>>();
         Assert.NotNull(body);
 
         var result = body!.Single(s => s.ShipmentId == shipment.Id);
@@ -129,7 +129,7 @@ public class ShipmentDelayRiskTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<ShipmentDelayRiskResponse>>();
+        var body = await response.Content.ReadJsonAsync<List<ShipmentDelayRiskResponse>>();
         Assert.NotNull(body);
 
         var result = body!.Single(s => s.ShipmentId == shipment.Id);
@@ -160,7 +160,7 @@ public class ShipmentDelayRiskTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<ShipmentDelayRiskResponse>>();
+        var body = await response.Content.ReadJsonAsync<List<ShipmentDelayRiskResponse>>();
         Assert.NotNull(body);
         Assert.DoesNotContain(body!, s => s.ShipmentId == shipment.Id);
     }

@@ -32,7 +32,7 @@ public class DriverQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<DriverSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<DriverSummaryDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, d => d.Id == driver.Id);
     }
@@ -68,7 +68,7 @@ public class DriverQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<DriverShipmentDto>>();
+        var body = await response.Content.ReadJsonAsync<List<DriverShipmentDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, s => s.ShipmentId == shipment.Id);
     }
@@ -89,7 +89,7 @@ public class DriverQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<DriverRouteCurrentDto>();
+        var body = await response.Content.ReadJsonAsync<DriverRouteCurrentDto>();
         Assert.NotNull(body);
         Assert.True(body!.IsActive);
 
@@ -137,7 +137,7 @@ public class DriverQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<DriverRouteCurrentDto>();
+        var body = await response.Content.ReadJsonAsync<DriverRouteCurrentDto>();
         Assert.NotNull(body);
         Assert.Equal(2, body!.Stops.Count);
 

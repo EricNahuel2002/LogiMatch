@@ -46,7 +46,7 @@ public class CommitFromProposalTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<CommitFromProposalResponse>();
+        var body = await response.Content.ReadJsonAsync<CommitFromProposalResponse>();
         Assert.NotNull(body);
         var committed = Assert.Single(body!.Routes);
         Assert.Equal(driver.Id, committed.DriverId);
@@ -98,7 +98,7 @@ public class CommitFromProposalTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<CommitFromProposalResponse>();
+        var body = await response.Content.ReadJsonAsync<CommitFromProposalResponse>();
         Assert.NotNull(body);
         var committed = Assert.Single(body!.Routes);
 
@@ -162,7 +162,7 @@ public class CommitFromProposalTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<CommitFromProposalResponse>();
+        var body = await response.Content.ReadJsonAsync<CommitFromProposalResponse>();
         Assert.NotNull(body);
         Assert.Equal(2, body!.Routes.Length);
 

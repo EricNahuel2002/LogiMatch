@@ -176,7 +176,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             var assignment = Assert.Single(proposal!.Assignments);
             Assert.Equal(arranged.DriverId, assignment.DriverId);
@@ -234,7 +234,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Equal(3, proposal!.ShipmentCount);
             Assert.Equal(15m, Assert.Single(proposal.Assignments).LoadKg);
@@ -343,7 +343,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             var assignment = Assert.Single(proposal!.Assignments);
             Assert.Equal(nearest.Id, assignment.DepositId);
 
@@ -375,7 +375,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             var assignment = Assert.Single(proposal!.Assignments);
             Assert.NotEqual(inactiveNearest.Id, assignment.DepositId);
 
@@ -430,7 +430,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             var assignment = Assert.Single(proposal!.Assignments);
             Assert.Equal(arranged.DepositId, assignment.DepositId);
             Assert.NotEqual(nearest.Id, assignment.DepositId);
@@ -463,7 +463,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Equal(1, proposal!.ShipmentCount);
             Assert.Equal(arranged.Shipment.Id, Assert.Single(proposal.Assignments).Stops[0].ShipmentId);
@@ -502,7 +502,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Equal(1, proposal!.ShipmentCount);
             Assert.Equal(arranged.Shipment.Id, Assert.Single(proposal.Assignments).Stops[0].ShipmentId);
@@ -541,7 +541,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Equal(1, proposal!.ShipmentCount);
             Assert.Equal(arranged.Shipment.Id, Assert.Single(proposal.Assignments).Stops[0].ShipmentId);
@@ -616,7 +616,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Equal(1, proposal!.ShipmentCount);
 
@@ -843,7 +843,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Empty(proposal!.ExcludedShipments);
             Assert.Equal(seeded.Count, proposal.ShipmentCount);
@@ -912,7 +912,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Empty(proposal!.ExcludedShipments);
             Assert.Empty(proposal.ExcludedDrivers);
@@ -1099,7 +1099,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Empty(proposal!.ExcludedDrivers);
             Assert.Equal(4, proposal.ShipmentCount);
@@ -1152,7 +1152,7 @@ public class RoutePlanningPreviewTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            var proposal = await response.Content.ReadJsonAsync<ProposalResponse>();
             Assert.NotNull(proposal);
             Assert.Equal(1000m, proposal!.Assignments.Sum(a => a.LoadKg));
             Assert.Equal(1, proposal.DriverCount);

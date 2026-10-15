@@ -32,7 +32,7 @@ public class OrderQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<OrderSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<OrderSummaryDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, o => o.Id == order.Id);
     }
@@ -53,7 +53,7 @@ public class OrderQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<OrderDetailsDto>();
+        var body = await response.Content.ReadJsonAsync<OrderDetailsDto>();
         Assert.NotNull(body);
         Assert.Equal(order.Id, body!.Id);
         Assert.Equal(2, body.Items.Length);

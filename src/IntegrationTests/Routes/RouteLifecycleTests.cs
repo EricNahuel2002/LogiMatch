@@ -31,7 +31,7 @@ public class RouteLifecycleTests
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<CreatedResponse>();
+        var body = await response.Content.ReadJsonAsync<CreatedResponse>();
         Assert.NotNull(body);
         Assert.Equal($"/api/routes/{body!.Id}", response.Headers.Location?.ToString());
 

@@ -36,7 +36,7 @@ public class ShipmentLifecycleTests
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<CreatedResponse>();
+        var body = await response.Content.ReadJsonAsync<CreatedResponse>();
         Assert.NotNull(body);
 
         using var verify = _fixture.Factory.OpenDatabaseAsync();

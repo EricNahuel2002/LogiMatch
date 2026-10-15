@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Api.Auth;
 using Api.Authorization;
 using Api.Extensions;
@@ -74,7 +75,9 @@ builder.Services
     .AddPolicy(Policies.AdminOnly, policy => policy.RequireRole("Admin"))
     .AddPolicy(Policies.DriverOnly, policy => policy.RequireRole("Driver"));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IDriverRealtimeNotifier, SignalRDriverRealtimeNotifier>();
 builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);

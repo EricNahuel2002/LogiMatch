@@ -31,7 +31,7 @@ public class AuthTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var body = await response.Content.ReadJsonAsync<LoginResponse>();
         Assert.NotNull(body);
         Assert.False(string.IsNullOrWhiteSpace(body!.Token));
         Assert.True(body.ExpiresAtUtc > DateTime.UtcNow);

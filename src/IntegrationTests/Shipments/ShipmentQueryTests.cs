@@ -34,7 +34,7 @@ public class ShipmentQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<ShipmentSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<ShipmentSummaryDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, s => s.Id == shipment.Id);
     }
@@ -55,11 +55,30 @@ public class ShipmentQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<ShipmentDetailsDto>();
+        var body = await response.Content.ReadJsonAsync<ShipmentDetailsDto>();
         Assert.NotNull(body);
         Assert.Equal(shipment.Id, body!.Id);
         Assert.Equal(ShipmentStatus.Pending, body.Status);
         Assert.Equal(2, body.Items.Length);
+    }
+
+    [Fact]
+    public async Task GetById_SerializesStatusEnumAsString()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+        var shipment = await TestDataBuilder.CreatePendingShipmentAsync(
+            arrange.Db,
+            [OrderItem.Create("Item", 10m, 1, 5m)]);
+
+        using var client = await _fixture.Factory.CreateAuthorizedClientAsync(
+            ApiWebApplicationFactory.AdminEmail,
+            ApiWebApplicationFactory.AdminPassword);
+
+        var response = await client.GetAsync($"/api/shipments/{shipment.Id}");
+        var raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("\"status\":\"Pending\"", raw);
     }
 
     [Fact]
@@ -92,7 +111,7 @@ public class ShipmentQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<ShipmentHistoryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<ShipmentHistoryDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, h => h.ShipmentId == shipment.Id && h.Status == ShipmentStatus.InProgress);
     }
@@ -126,7 +145,7 @@ public class ShipmentQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<DeliveryAttemptDto>>();
+        var body = await response.Content.ReadJsonAsync<List<DeliveryAttemptDto>>();
         Assert.NotNull(body);
         var attempt = Assert.Single(body!, a => a.ShipmentId == shipment.Id);
         Assert.Equal(1, attempt.AttemptNumber);

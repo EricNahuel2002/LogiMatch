@@ -34,7 +34,7 @@ public class RouteQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<RouteSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<RouteSummaryDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, r => r.Id == route.Id && r.IsActive);
     }
@@ -64,7 +64,7 @@ public class RouteQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<RouteDetailsDto>();
+        var body = await response.Content.ReadJsonAsync<RouteDetailsDto>();
         Assert.NotNull(body);
         Assert.Equal(route.Id, body!.Id);
         var returnedStop = Assert.Single(body.Stops);

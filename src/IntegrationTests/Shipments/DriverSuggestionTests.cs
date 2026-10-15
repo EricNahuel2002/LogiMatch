@@ -35,7 +35,7 @@ public class DriverSuggestionTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<DriverAssignmentSuggestion>();
+        var body = await response.Content.ReadJsonAsync<DriverAssignmentSuggestion>();
         Assert.NotNull(body);
         Assert.Equal(shipment.Id, body!.ShipmentId);
         Assert.NotEmpty(body.Ranking);

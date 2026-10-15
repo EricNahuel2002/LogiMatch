@@ -95,7 +95,7 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
         response.EnsureSuccessStatusCode();
 
-        var body = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var body = await response.Content.ReadJsonAsync<LoginResponse>();
         return body!.Token;
     }
 

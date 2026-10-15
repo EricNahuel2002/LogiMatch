@@ -28,7 +28,7 @@ public class CatalogQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<VehicleSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<VehicleSummaryDto>>();
         Assert.NotNull(body);
         Assert.Contains(body!, v => v.LicensePlate == "AA123BB");
     }
@@ -44,7 +44,7 @@ public class CatalogQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<DepositSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<DepositSummaryDto>>();
         Assert.NotNull(body);
         Assert.NotEmpty(body!);
     }
@@ -60,7 +60,7 @@ public class CatalogQueryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<List<CustomerSummaryDto>>();
+        var body = await response.Content.ReadJsonAsync<List<CustomerSummaryDto>>();
         Assert.NotNull(body);
         Assert.NotEmpty(body!);
     }
