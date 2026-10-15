@@ -40,12 +40,12 @@ public interface IDriverEligibilityFilter
 /// Decides which of the submitted drivers are worth solving for.
 /// </summary>
 /// <remarks>
-/// Capacity is decided before the ranking, not after. <see cref="DriverScoring.Rank" />
-/// normalizes min-max over the pool it is given, so a driver that cannot carry the heaviest
-/// shipment would contribute the minimum free capacity of the whole pool and drag the
-/// normalized capacity of every other driver down with it. Excluding it up front keeps the
-/// scores of the usable drivers meaningful, and a driver that cannot carry a shipment is not a
-/// scoring question at all.
+/// Capacity is decided before the ranking, not after. A driver whose vehicle cannot carry any
+/// plannable shipment can never be assigned a stop, so it is not a scoring question at all and
+/// would only drag on the min-max normalization <see cref="DriverScoring.Rank" /> does over the
+/// pool it is given. A driver that can carry some but not all shipments stays: which shipment
+/// rides on which vehicle is the solver's decision to make, and dropping usable capacity here
+/// would turn a selection the fleet can serve into a problem the solver cannot solve.
 /// </remarks>
 public sealed class DriverEligibilityFilter : IDriverEligibilityFilter
 {
@@ -87,16 +87,16 @@ public sealed class DriverEligibilityFilter : IDriverEligibilityFilter
             shipmentNodeOffset: drivers.Count,
             shipmentCount: shipments.Count);
 
-        var heaviestShipmentKg = shipments.Count == 0
+        var lightestShipmentKg = shipments.Count == 0
             ? 0m
-            : shipments.Max(s => s.WeightKg);
+            : shipments.Min(s => s.WeightKg);
 
         var scoreable = new List<DriverScoringInput>(inputs.Count);
         var excluded = new List<IneligibleDriver>(inputs.Count);
 
         foreach (var input in inputs)
         {
-            if (input.FreeCapacityKg >= heaviestShipmentKg)
+            if (input.FreeCapacityKg >= lightestShipmentKg)
             {
                 scoreable.Add(input);
                 continue;
@@ -106,8 +106,9 @@ public sealed class DriverEligibilityFilter : IDriverEligibilityFilter
                 input.DriverId,
                 Score: null,
                 DriverIneligibilityReason.InsufficientVehicleCapacity,
-                $"Free capacity of {Describe(input.FreeCapacityKg)} kg is below the heaviest " +
-                $"plannable shipment of {Describe(heaviestShipmentKg)} kg."));
+                $"Free capacity of {Describe(input.FreeCapacityKg)} kg cannot carry any " +
+                $"plannable shipment, the lightest of which weighs " +
+                $"{Describe(lightestShipmentKg)} kg."));
         }
 
         if (scoreable.Count == 0)

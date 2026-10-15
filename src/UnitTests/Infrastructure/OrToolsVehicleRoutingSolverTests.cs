@@ -203,6 +203,22 @@ public class OrToolsVehicleRoutingSolverTests
     }
 
     [Fact]
+    public void Solve_TotalWeightOverCapacityAcrossShipments_ReturnsNoSolution()
+    {
+        var scenario = new Scenario();
+        scenario.AddShipment(weightKg: 500m);
+        scenario.AddShipment(weightKg: 500m);
+        scenario.AddShipment(weightKg: 500m);
+        scenario.AddShipment(weightKg: 500m);
+        scenario.AddDriver(capacityKg: 1500m);
+
+        // 2000 kg into a 1500 kg truck: every shipment fits on its own, so nothing contradicts
+        // the constraints until the loads accumulate, which only the search sees. No order works,
+        // and that is a fact of the data rather than a model the solver rejected.
+        Assert.Equal(RoutingSolveFailure.Infeasible, FailureOf(scenario.Build()));
+    }
+
+    [Fact]
     public void Solve_WindowOutsideHorizon_IsRejectedBeforeReachingTheSolver()
     {
         var scenario = new Scenario { HorizonSeconds = 30 };

@@ -874,6 +874,127 @@ public class RoutePlanningPreviewTests
     }
 
     /// <summary>
+    /// The seeded Fiorino (800 kg) and S10 (1000 kg) cannot take the 1400 kg "Carga pesada" on
+    /// their own, but only one vehicle has to: between the three seeded trucks the fleet holds
+    /// every kilogram of the pending plan. Dropping the two smaller ones used to leave a single
+    /// 2000 kg truck against 3440 kg, which came back as a rejected model rather than as a plan.
+    /// "Caja de repuestos" stays out of the expected set because its window is frozen at seed
+    /// time, which makes a database seeded long ago drop it from the plan.
+    /// </summary>
+    [Fact]
+    public async Task Preview_PlansEveryPendingShipmentWithTrucksThatCannotCarryTheHeaviestAlone()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+
+        var fiorino = await LoadSeededDriverAsync(arrange.Db, "chofer2@logimatch.com", "AD321EE");
+        var s10 = await LoadSeededDriverAsync(arrange.Db, "chofer3@logimatch.com", "AE111FF");
+        var ranger = await LoadSeededDriverAsync(arrange.Db, "chofer5@logimatch.com", "AI444JJ");
+
+        var seeded = await LoadSeededPendingShipmentsAsync(
+            arrange.Db,
+            "Bulto textil",
+            "Equipo de cómputo",
+            "Mercadería general",
+            "Pallet de bebidas",
+            "Cajas de vidrio",
+            "Mercadería suelta",
+            "Carga pesada");
+
+        var parked = await ParkForeignPendingShipmentsAsync([.. seeded.Select(s => s.Id)]);
+
+        try
+        {
+            using var client = await CreateAdminClientAsync();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/route-planning/preview",
+                Request(fiorino, s10, ranger, DemoDataSeeder.CentralDepositId));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var proposal = await response.Content.ReadFromJsonAsync<ProposalResponse>();
+            Assert.NotNull(proposal);
+            Assert.Empty(proposal!.ExcludedShipments);
+            Assert.Empty(proposal.ExcludedDrivers);
+            Assert.Equal(seeded.Count, proposal.ShipmentCount);
+
+            // Every seeded pending shipment is routed exactly once, and the load is conserved.
+            var stops = proposal.Assignments.SelectMany(a => a.Stops).Select(s => s.ShipmentId).ToList();
+            Assert.Equal(seeded.Count, stops.Count);
+            Assert.Equal(seeded.Select(s => s.Id).Order(), stops.Order());
+            Assert.Equal(seeded.Sum(s => s.WeightKg), proposal.Assignments.Sum(a => a.LoadKg));
+
+            // Which truck takes which shipment is the solver's call, so only the per-vehicle
+            // capacity is asserted.
+            var capacityByDriver = new Dictionary<Guid, decimal>
+            {
+                [fiorino.DriverId] = fiorino.CapacityKg,
+                [s10.DriverId] = s10.CapacityKg,
+                [ranger.DriverId] = ranger.CapacityKg
+            };
+
+            foreach (var assignment in proposal.Assignments)
+            {
+                Assert.True(assignment.LoadKg <= capacityByDriver[assignment.DriverId]);
+                Assert.NotEmpty(assignment.Stops);
+            }
+        }
+        finally
+        {
+            await RestorePendingShipmentsAsync(parked);
+        }
+    }
+
+    /// <summary>
+    /// The same seeded load against one truck only: the search finds nothing, and the report has
+    /// to name the shortfall rather than claim the model was built wrong.
+    /// </summary>
+    [Fact]
+    public async Task Preview_FleetTooSmallForEveryPendingShipment_NamesTheShortfall()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+
+        var ranger = await LoadSeededDriverAsync(arrange.Db, "chofer5@logimatch.com", "AI444JJ");
+
+        var seeded = await LoadSeededPendingShipmentsAsync(
+            arrange.Db,
+            "Bulto textil",
+            "Equipo de cómputo",
+            "Mercadería general",
+            "Pallet de bebidas",
+            "Cajas de vidrio",
+            "Mercadería suelta",
+            "Carga pesada");
+
+        var parked = await ParkForeignPendingShipmentsAsync([.. seeded.Select(s => s.Id)]);
+
+        try
+        {
+            using var client = await CreateAdminClientAsync();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/route-planning/preview",
+                Request(DemoDataSeeder.CentralDepositId, ranger.DriverId, ranger.VehicleId));
+
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+            // Numbers are checked without their separators: the API renders them under its own
+            // culture, so asserting on "2000 kg" verbatim would only pin the machine's locale.
+            var detail = await response.Content.ReadAsStringAsync();
+            Assert.Contains("No feasible route", detail);
+            Assert.Contains("2000", detail);
+            Assert.Contains("3440", detail);
+            Assert.Contains("1440", detail);
+            Assert.Contains("kg short", detail);
+            Assert.DoesNotContain("defect", detail);
+        }
+        finally
+        {
+            await RestorePendingShipmentsAsync(parked);
+        }
+    }
+
+    /// <summary>
     /// Submits the two demo drivers in the given order. The order is not cosmetic: node order in
     /// the matrix is submission order, and the stub matrix puts the second driver next to the
     /// shipments. Submitting the far one first is what makes the bigger truck belong to the weaker
@@ -897,6 +1018,38 @@ public class RoutePlanningPreviewTests
             }
         ]
     };
+
+    /// <summary>
+    /// Submits three demo drivers against one shared deposit, in submission order.
+    /// </summary>
+    private static PlanRoutesRequest Request(
+        SeededDriver first,
+        SeededDriver second,
+        SeededDriver third,
+        Guid depositId) => new()
+        {
+            DriverSelections =
+            [
+                new DriverSelectionRequest
+                {
+                    DriverId = first.DriverId,
+                    VehicleId = first.VehicleId,
+                    DepositId = depositId
+                },
+                new DriverSelectionRequest
+                {
+                    DriverId = second.DriverId,
+                    VehicleId = second.VehicleId,
+                    DepositId = depositId
+                },
+                new DriverSelectionRequest
+                {
+                    DriverId = third.DriverId,
+                    VehicleId = third.VehicleId,
+                    DepositId = depositId
+                }
+            ]
+        };
 
     /// <summary>
     /// Loads the two demo drivers whose vehicles differ enough to matter: AA123BB carries 1500 kg

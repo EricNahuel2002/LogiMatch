@@ -90,7 +90,7 @@ public class DriverEligibilityFilterTests
     }
 
     [Fact]
-    public async Task SelectAsync_ExcludesDriversThatCannotCarryTheHeaviestShipment()
+    public async Task SelectAsync_ExcludesDriversThatCannotCarryAnyShipment()
     {
         Guid[] driverIds = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
         var pool = Pool(driverIds, capacitiesKg: [500m, 5m, 500m]);
@@ -114,6 +114,28 @@ public class DriverEligibilityFilterTests
         // against and it must not hold up the scores of the drivers that can work.
         Assert.DoesNotContain(driverIds[1], result.ScoreByDriverId.Keys);
         Assert.All(result.KeptDrivers, d => Assert.True(d.Score > 0m));
+    }
+
+    [Fact]
+    public async Task SelectAsync_KeepsDriversThatCanCarrySomeShipmentsButNotTheHeaviest()
+    {
+        Guid[] driverIds = [Guid.NewGuid(), Guid.NewGuid()];
+        var pool = Pool(driverIds, capacitiesKg: [2000m, 800m]);
+
+        var result = await Filter(CandidateRepository(pool.Candidates)).SelectAsync(
+            pool.Drivers,
+            pool.VehiclesById,
+            ShipmentsOf(1400m, 300m),
+            Matrix(2, 2),
+            Matrix(2, 2),
+            DayStart,
+            DayEnd);
+
+        // The 800 kg truck cannot take the 1400 kg shipment, but which shipment rides on which
+        // vehicle is the solver's decision: dropping it up front throws away capacity the plan
+        // needs, which is what turned a solvable fleet into an infeasible problem.
+        Assert.Empty(result.ExcludedDrivers);
+        Assert.Equal(driverIds, result.KeptDrivers.Select(d => d.DriverId));
     }
 
     [Fact]

@@ -202,7 +202,7 @@ public class RoutePlanningService : IRoutePlanningService
         if (solution.Solution is null)
         {
             throw new InvalidOperationException(
-                BuildNoSolutionMessage(problem, solution.Failure));
+                BuildNoSolutionMessage(problem, solution.Failure, eligibility.ExcludedDrivers));
         }
 
         return new RoutePlanningProposalResponse(
@@ -436,13 +436,15 @@ public class RoutePlanningService : IRoutePlanningService
     /// </summary>
     /// <remarks>
     /// The generic sentence stays first so callers can keep keying on it, and the diagnosis only
-    /// claims what the failure actually establishes. A search that ran out of time has proven
-    /// nothing, so it does not get a capacity verdict, and an invalid model is reported as a
-    /// defect rather than as an unplannable set of shipments.
+    /// claims what the failure actually establishes. An invalid model is reported as a defect
+    /// rather than as an unplannable set of shipments. Drivers dropped before solving are named
+    /// too: the capacity the solver could use is the capacity of the kept drivers, and without
+    /// them the shortfall reads as a fleet problem when it is only part of one.
     /// </remarks>
     private static string BuildNoSolutionMessage(
         VehicleRoutingProblem problem,
-        RoutingSolveFailure failure)
+        RoutingSolveFailure failure,
+        IReadOnlyList<IneligibleDriver> excludedDrivers)
     {
         const string head =
             "No feasible route covers every plannable pending shipment with the selected " +
@@ -460,7 +462,12 @@ public class RoutePlanningService : IRoutePlanningService
             _ => DescribeBindingConstraint(problem)
         };
 
-        return $"{head} {reason}";
+        var exclusions = excludedDrivers.Count == 0
+            ? string.Empty
+            : $" The following selected drivers were excluded before solving: " +
+                $"{DescribeExclusions(excludedDrivers)}.";
+
+        return $"{head} {reason}{exclusions}";
     }
 
     /// <summary>
@@ -486,6 +493,19 @@ public class RoutePlanningService : IRoutePlanningService
             return $"The selected fleet offers {fleetCapacityKg} kg and the {problem.ShipmentCount} " +
                 $"plannable pending shipments weigh {weightKg} kg: {weightKg - fleetCapacityKg} kg short, " +
                 $"so it needs at least one more vehicle of {weightKg - fleetCapacityKg} kg or more.";
+        }
+
+        var heaviestKg = problem.Shipments.Max(s => s.WeightKg);
+        var largestVehicleKg = Enumerable
+            .Range(0, problem.DriverCount)
+            .Select(i => problem.Vehicles[problem.GetVehicleIndex(i)].CapacityKg)
+            .Max();
+
+        if (largestVehicleKg < heaviestKg)
+        {
+            return $"The heaviest plannable pending shipment weighs {heaviestKg} kg and the largest " +
+                $"selected vehicle carries {largestVehicleKg} kg: no route can carry it, so the " +
+                $"fleet needs a vehicle of {heaviestKg} kg or more.";
         }
 
         return $"Capacity is not the limit ({fleetCapacityKg} kg available for {weightKg} kg to be " +

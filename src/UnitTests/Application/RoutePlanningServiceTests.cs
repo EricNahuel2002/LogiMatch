@@ -813,6 +813,65 @@ public class RoutePlanningServiceTests
     }
 
     /// <summary>
+    /// Total capacity can be enough while no single vehicle fits the heaviest shipment. Shopping
+    /// for more kilograms would not help there, so the message has to name the oversized load.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_NoVehicleFitsTheHeaviestShipment_NamesTheOversizedShipment()
+    {
+        var secondDriverId = Guid.NewGuid();
+        var secondVehicleId = Guid.NewGuid();
+
+        _users.Setup(u => u.GetDriversByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildDriver(_driverId, DriverLocation), BuildDriver(secondDriverId, DriverLocation)]);
+        _vehicles.Setup(v => v.GetManyByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildVehicle(_vehicleId, capacityKg: 400m), BuildVehicle(secondVehicleId, capacityKg: 400m)]);
+        _deposits.Setup(d => d.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([BuildDeposit(_depositId, Depot)]);
+        ArrangeCandidates(
+            Candidate(_driverId, successes: 10, kilometers: 50m),
+            Candidate(secondDriverId, successes: 10, kilometers: 50m));
+        ArrangeShipments(
+            BuildShipment(_shipmentId, weightKg: 600m),
+            BuildShipment(_otherShipmentId, weightKg: 100m));
+        ArrangeNoSolution(RoutingSolveFailure.Infeasible);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(TwoDriverRequest(
+                _driverId, _vehicleId, _depositId, secondDriverId, secondVehicleId, _depositId)));
+
+        Assert.Contains("No feasible route", exception.Message);
+        Assert.Contains("heaviest plannable pending shipment weighs 600 kg", exception.Message);
+        Assert.Contains("largest selected vehicle carries 400 kg", exception.Message);
+        Assert.DoesNotContain("kg short", exception.Message);
+    }
+
+    /// <summary>
+    /// The capacity the solver gets is the capacity of the drivers it kept, so a failure has to
+    /// name the drivers that were dropped before it: otherwise the shortfall reads as a problem
+    /// with the fleet the operator selected instead of with the part of it that was usable.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAsync_NoFeasibleSolution_NamesTheDriversExcludedBeforeSolving()
+    {
+        var secondDriverId = Guid.NewGuid();
+        var secondVehicleId = Guid.NewGuid();
+        ArrangeTwoDrivers(secondDriverId, secondVehicleId, firstVehicleCapacityKg: 5m);
+        ArrangeNoSolution(RoutingSolveFailure.Infeasible);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService().PreviewAsync(TwoDriverRequest(
+                _driverId, _vehicleId, _depositId, secondDriverId, secondVehicleId, _depositId)));
+
+        Assert.Contains("No feasible route", exception.Message);
+        Assert.Contains("excluded before solving", exception.Message);
+        Assert.Contains(_driverId.ToString(), exception.Message);
+        Assert.Contains(
+            DriverIneligibilityReason.InsufficientVehicleCapacity.ToString(),
+            exception.Message);
+    }
+
+    /// <summary>
     /// When capacity is not the problem, saying so is what stops the operator from going shopping
     /// for a truck that would not help.
     /// </summary>
@@ -1039,7 +1098,7 @@ public class RoutePlanningServiceTests
     }
 
     [Fact]
-    public async Task PreviewAsync_DriverWithoutCapacityForTheHeaviestShipment_IsExcluded()
+    public async Task PreviewAsync_DriverWithoutCapacityForAnyShipment_IsExcluded()
     {
         var secondDriverId = Guid.NewGuid();
         var secondVehicleId = Guid.NewGuid();

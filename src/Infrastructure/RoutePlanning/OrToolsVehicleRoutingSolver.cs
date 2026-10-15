@@ -14,8 +14,8 @@ namespace Infrastructure.RoutePlanning;
 /// here. A shipment that cannot be served therefore makes the whole problem infeasible and
 /// <see cref="Solve" /> comes back with no solution, which the caller surfaces as an explicit
 /// failure. "No solution" is not one thing: <see cref="RoutingSolveOutcome.Failure" /> separates
-/// a proven infeasibility from a search that ran into <see cref="SearchTimeLimitSeconds" />,
-/// because only the first one is a statement about the data.
+/// a search that ran into <see cref="SearchTimeLimitSeconds" /> from every other way of coming
+/// back empty, because only the timeout leaves the plan's feasibility undecided.
 /// </remarks>
 public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
 {
@@ -79,16 +79,20 @@ public sealed class OrToolsVehicleRoutingSolver : IVehicleRoutingSolver
     /// Maps the solver status onto the distinction the caller cares about.
     /// </summary>
     /// <remarks>
-    /// OR-Tools reports a search that hit its time limit the same way it reports one that ran to
-    /// completion without ever finding a solution, and neither of them is a proof of
-    /// infeasibility. Only <c>RoutingInfeasible</c> means the constraints were shown to be
-    /// unsatisfiable, so that is the only status allowed to claim the plan cannot be made.
+    /// OR-Tools proves infeasibility eagerly: it returns <c>RoutingInfeasible</c> only when
+    /// propagation at the root of the search tree already contradicts the constraints, which a
+    /// shortfall spread over several shipments does not — the route order is still open, so the
+    /// overload only becomes visible during the search. That search then ends without a solution
+    /// and without consuming <see cref="SearchTimeLimitSeconds" />, reported as
+    /// <c>RoutingFail</c>: no solution exists, which is a statement about the data, not about
+    /// the model. <c>RoutingInvalid</c> is the only status that means the model or its
+    /// parameters are wrong, and a search that hit the time limit proves nothing.
     /// </remarks>
     private static RoutingSolveFailure TranslateStatus(RoutingSearchStatus.Types.Value status) => status switch
     {
         RoutingSearchStatus.Types.Value.RoutingInfeasible => RoutingSolveFailure.Infeasible,
+        RoutingSearchStatus.Types.Value.RoutingFail => RoutingSolveFailure.Infeasible,
         RoutingSearchStatus.Types.Value.RoutingInvalid => RoutingSolveFailure.InvalidModel,
-        RoutingSearchStatus.Types.Value.RoutingFail => RoutingSolveFailure.InvalidModel,
         _ => RoutingSolveFailure.NoSolutionWithinTimeLimit
     };
 

@@ -29,7 +29,10 @@ public enum RoutingSolveFailure
     /// </summary>
     NoSolutionWithinTimeLimit,
 
-    /// <summary>The search proved that no assignment satisfies the constraints.</summary>
+    /// <summary>
+    /// The search ended without a solution and without consuming its time limit: no assignment
+    /// satisfies the constraints.
+    /// </summary>
     Infeasible,
 
     /// <summary>
