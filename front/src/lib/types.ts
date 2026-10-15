@@ -116,6 +116,9 @@ export interface ShipmentDelayRisk {
   priority: ShipmentPriority;
   delayRiskPercentage?: number | null;
   driver?: ShipmentDelayRiskDriver | null;
+  orderId: string;
+  weightKg: number;
+  customerName: string;
 }
 
 export interface ShipmentOrderItem {

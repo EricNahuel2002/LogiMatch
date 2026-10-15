@@ -9,4 +9,7 @@ public sealed record ShipmentDelayRiskResponse(
     ShipmentStatus Status,
     ShipmentPriority Priority,
     decimal? DelayRiskPercentage,
-    ShipmentDriverResponse? Driver);
+    ShipmentDriverResponse? Driver,
+    Guid OrderId,
+    decimal WeightKg,
+    string CustomerName);

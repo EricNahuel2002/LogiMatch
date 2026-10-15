@@ -260,6 +260,9 @@ public class ShipmentService : IShipmentService
             shipment.DelayRiskPercentage,
             driver is null
                 ? null
-                : new ShipmentDriverResponse(driver.Id, driver.Name, driver.Surname));
+                : new ShipmentDriverResponse(driver.Id, driver.Name, driver.Surname),
+            shipment.OrderId,
+            shipment.Order.Items.Sum(i => i.WeightKg * i.Quantity),
+            $"{shipment.Order.Customer.Name} {shipment.Order.Customer.Surname}".Trim());
     }
 }

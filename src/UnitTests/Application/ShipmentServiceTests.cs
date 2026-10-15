@@ -63,6 +63,8 @@ public class ShipmentServiceTests
         var item = Assert.Single(result);
         Assert.Equal(5m, item.DelayRiskPercentage);
         Assert.Null(item.Driver);
+        Assert.Equal(shipment.OrderId, item.OrderId);
+        Assert.Equal(5m, item.WeightKg);
     }
 
     [Fact]

@@ -1,12 +1,20 @@
-﻿import { useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '@/lib/api';
 import type {
   CommitFromProposalResponse,
   RoutePlanningProposal,
 } from '@/lib/types';
-import { formatMeters, shortId } from '@/lib/format';
-import { useDeposits, useDrivers, useVehicles, driverName, vehicleLabel } from '@/hooks/useCatalog';
+import { formatKg, formatMeters, shortId } from '@/lib/format';
+import {
+  useDeposits,
+  useDrivers,
+  usePendingShipments,
+  useVehicles,
+  driverName,
+  vehicleLabel,
+} from '@/hooks/useCatalog';
+import { priorityLabel, priorityTone } from '@/lib/shipment';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table';
@@ -19,6 +27,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/useToast';
 import { linkButtonPrimary } from '@/components/ui/styles';
+import { RoutePlanBranch } from './components/RoutePlanBranch';
 
 interface SelectionRow {
   key: number;
@@ -38,6 +47,12 @@ export default function RoutePlanningPage() {
   const { data: drivers, loading: driversLoading } = useDrivers();
   const { data: vehicles, loading: vehiclesLoading } = useVehicles();
   const { data: deposits } = useDeposits();
+  const {
+    data: pending,
+    loading: pendingLoading,
+    error: pendingError,
+    reload: reloadPending,
+  } = usePendingShipments();
 
   const [rows, setRows] = useState<SelectionRow[]>([newRow()]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +62,25 @@ export default function RoutePlanningPage() {
   const [committed, setCommitted] = useState<CommitFromProposalResponse | null>(null);
 
   const ready = rows.length > 0 && rows.every((r) => r.driverId && r.vehicleId);
+
+  const shipmentById = useMemo(
+    () => new Map(pending.map((s) => [s.shipmentId, s])),
+    [pending],
+  );
+
+  const totalPendingWeightKg = useMemo(
+    () => pending.reduce((sum, s) => sum + (s.weightKg ?? 0), 0),
+    [pending],
+  );
+
+  const totalSelectedCapacityKg = useMemo(
+    () =>
+      rows.reduce(
+        (sum, r) => sum + (vehicles.find((v) => v.id === r.vehicleId)?.capacityKg ?? 0),
+        0,
+      ),
+    [rows, vehicles],
+  );
 
   function updateRow(key: number, patch: Partial<SelectionRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -101,6 +135,7 @@ export default function RoutePlanningPage() {
       });
       setCommitted(res);
       notify(`Se crearon ${res.routes.length} ruta(s)`, 'success');
+      reloadPending();
     } catch (e: any) {
       notify(e.message, 'error');
     } finally {
@@ -130,84 +165,158 @@ export default function RoutePlanningPage() {
         description="Elegí conductores y vehículos, previsualizá la propuesta y persistila como rutas."
       />
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Recursos a planificar</CardTitle>
-          <Button variant="secondary" size="sm" onClick={addRow}>
-            + Agregar conductor
-          </Button>
-        </CardHeader>
-        <CardBody>
-          <form onSubmit={preview} className="space-y-5">
-            <div className="space-y-4">
-              {rows.map((row, index) => (
-                <div
-                  key={row.key}
-                  className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2 lg:grid-cols-4"
-                >
-                  <Field label={`Conductor ${index + 1}`} required>
-                    <Select
-                      value={row.driverId}
-                      onChange={(e) => updateRow(row.key, { driverId: e.target.value })}
-                      disabled={driversLoading}
-                    >
-                      <option value="">Seleccioná…</option>
-                      {drivers.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {driverName(d)}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Vehículo" required>
-                    <Select
-                      value={row.vehicleId}
-                      onChange={(e) => updateRow(row.key, { vehicleId: e.target.value })}
-                      disabled={vehiclesLoading}
-                    >
-                      <option value="">Seleccioná…</option>
-                      {vehicles.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {vehicleLabel(v)}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Depósito" hint="Automático (más cercano) si se deja vacío.">
-                    <Select
-                      value={row.depositId}
-                      onChange={(e) => updateRow(row.key, { depositId: e.target.value })}
-                    >
-                      <option value="">Automático</option>
-                      {deposits.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.address}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <div className="flex items-end justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeRow(row.key)}
-                      disabled={rows.length === 1}
-                    >
-                      Quitar
-                    </Button>
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recursos a planificar</CardTitle>
+            <Button variant="secondary" size="sm" onClick={addRow}>
+              + Agregar conductor
+            </Button>
+          </CardHeader>
+          <CardBody>
+            <form onSubmit={preview} className="space-y-5">
+              <div className="space-y-4">
+                {rows.map((row, index) => {
+                  const selectedVehicle = vehicles.find((v) => v.id === row.vehicleId);
+                  return (
+                  <div
+                    key={row.key}
+                    className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2"
+                  >
+                    <Field label={`Conductor ${index + 1}`} required>
+                      <Select
+                        value={row.driverId}
+                        onChange={(e) => updateRow(row.key, { driverId: e.target.value })}
+                        disabled={driversLoading}
+                      >
+                        <option value="">Seleccioná…</option>
+                        {drivers.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {driverName(d)}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Vehículo" required>
+                      <Select
+                        value={row.vehicleId}
+                        onChange={(e) => updateRow(row.key, { vehicleId: e.target.value })}
+                        disabled={vehiclesLoading}
+                      >
+                        <option value="">Seleccioná…</option>
+                        {vehicles.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {vehicleLabel(v)}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Depósito" hint="Automático (más cercano) si se deja vacío.">
+                      <Select
+                        value={row.depositId}
+                        onChange={(e) => updateRow(row.key, { depositId: e.target.value })}
+                      >
+                        <option value="">Automático</option>
+                        {deposits.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.address}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <div className="flex items-end justify-between gap-4 sm:col-span-2">
+                      <p className="text-xs text-muted">
+                        Capacidad máx. del vehículo:{' '}
+                        <span className="font-medium text-foreground">
+                          {selectedVehicle ? formatKg(selectedVehicle.capacityKg) : '—'}
+                        </span>
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeRow(row.key)}
+                        disabled={rows.length === 1}
+                      >
+                        Quitar
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
 
-            <div className="flex justify-end">
-              <Button type="submit" loading={loading} disabled={!ready}>
-                Previsualizar propuesta
-              </Button>
+                <p className="text-xs text-muted">
+                  Capacidad total de vehículos seleccionados:{' '}
+                  <span className="font-medium text-foreground">
+                    {formatKg(totalSelectedCapacityKg)}
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" loading={loading} disabled={!ready}>
+                  Previsualizar propuesta
+                </Button>
+              </div>
+            </form>
+          </CardBody>
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>Envíos pendientes</CardTitle>
+            <Badge tone="neutral">{pending.length} envío(s)</Badge>
+          </CardHeader>
+          {pendingLoading ? (
+            <div className="flex items-center gap-2 p-5 text-sm text-muted">
+              <Spinner /> Cargando…
             </div>
-          </form>
-        </CardBody>
-      </Card>
+          ) : pendingError ? (
+            <div className="p-5">
+              <Alert tone="danger">{pendingError}</Alert>
+            </div>
+          ) : pending.length === 0 ? (
+            <EmptyState
+              title="Sin envíos pendientes"
+              description="No hay envíos pendientes para planificar."
+            />
+          ) : (
+            <>
+              <div className="max-h-96 overflow-auto">
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>Envío</TH>
+                      <TH>Cliente</TH>
+                      <TH>Prioridad</TH>
+                      <TH>Riesgo</TH>
+                      <TH className="text-right">Peso</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {pending.map((s) => (
+                      <TR key={s.shipmentId}>
+                        <TD className="font-mono text-xs">{shortId(s.shipmentId)}</TD>
+                        <TD className="text-sm">{s.customerName || '-'}</TD>
+                        <TD>
+                          <Badge tone={priorityTone(s.priority)}>{priorityLabel(s.priority)}</Badge>
+                        </TD>
+                        <TD>{s.delayRiskPercentage != null ? `${s.delayRiskPercentage}%` : '-'}</TD>
+                        <TD className="text-right text-sm">{formatKg(s.weightKg)}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+              <div className="flex items-center justify-between border-t border-border px-5 py-3 text-sm">
+                <span className="text-muted">Peso total de pendientes</span>
+                <span className="font-semibold text-foreground">
+                  {pending.length} envío(s) · {formatKg(totalPendingWeightKg)}
+                </span>
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
 
       {error && (
         <Alert tone="danger" className="mb-6">
@@ -277,6 +386,7 @@ export default function RoutePlanningPage() {
           <Card>
             <CardHeader>
               <CardTitle>Rutas propuestas</CardTitle>
+              <Badge tone="neutral">{proposal.assignments.length} ruta(s)</Badge>
             </CardHeader>
             {proposal.assignments.length === 0 ? (
               <EmptyState
@@ -284,38 +394,19 @@ export default function RoutePlanningPage() {
                 description="No se pudo asignar ningún envío con los recursos elegidos."
               />
             ) : (
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Conductor</TH>
-                    <TH>Vehículo</TH>
-                    <TH>Depósito</TH>
-                    <TH>Carga (kg)</TH>
-                    <TH>Paradas</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {proposal.assignments.map((a) => (
-                    <TR key={a.driverId}>
-                      <TD>{driverLabel(a.driverId)}</TD>
-                      <TD>{vehicleLabelById(a.vehicleId)}</TD>
-                      <TD>{depositLabel(a.depositId)}</TD>
-                      <TD>{a.loadKg}</TD>
-                      <TD>
-                        <div className="flex flex-wrap gap-1">
-                          {[...a.stops]
-                            .sort((x, y) => x.stopOrder - y.stopOrder)
-                            .map((s) => (
-                              <Badge key={s.shipmentId} tone="neutral">
-                                {s.stopOrder}. {shortId(s.shipmentId)}
-                              </Badge>
-                            ))}
-                        </div>
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
+              <CardBody className="space-y-3">
+                {proposal.assignments.map((a, index) => (
+                  <RoutePlanBranch
+                    key={a.driverId}
+                    assignment={a}
+                    driverLabel={driverLabel(a.driverId)}
+                    vehicleLabel={vehicleLabelById(a.vehicleId)}
+                    depositLabel={depositLabel(a.depositId)}
+                    shipmentById={shipmentById}
+                    defaultOpen={index === 0}
+                  />
+                ))}
+              </CardBody>
             )}
           </Card>
 
@@ -380,7 +471,7 @@ export default function RoutePlanningPage() {
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 text-sm text-muted">
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted">
           <Spinner /> Calculando propuesta…
         </div>
       )}

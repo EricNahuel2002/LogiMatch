@@ -23,6 +23,11 @@ export function formatCurrency(value?: number | null) {
   return value.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
 }
 
+export function formatKg(value?: number | null) {
+  if (value == null) return '-';
+  return `${value.toLocaleString('es-AR', { maximumFractionDigits: 2 })} kg`;
+}
+
 export function shortId(value?: string | null) {
   if (!value) return '-';
   return value.length > 8 ? value.slice(0, 8) : value;

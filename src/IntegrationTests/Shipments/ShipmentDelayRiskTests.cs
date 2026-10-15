@@ -65,6 +65,9 @@ public class ShipmentDelayRiskTests
         Assert.Equal(routeDriver.Id, result.Driver!.DriverId);
         Assert.Equal(routeDriver.Name, result.Driver.Name);
         Assert.Equal(routeDriver.Surname, result.Driver.Surname);
+        Assert.Equal(order.Id, result.OrderId);
+        Assert.Equal(5m, result.WeightKg);
+        Assert.Equal($"{order.Customer.Name} {order.Customer.Surname}".Trim(), result.CustomerName);
     }
 
     [Fact]

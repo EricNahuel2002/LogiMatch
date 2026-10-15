@@ -1,24 +1,35 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
-import type { CustomerSummary, DepositSummary, DriverSummary, VehicleSummary } from '@/lib/types';
+import type {
+  CustomerSummary,
+  DepositSummary,
+  DriverSummary,
+  ShipmentDelayRisk,
+  VehicleSummary,
+} from '@/lib/types';
 
 interface CatalogResult<T> {
   data: T[];
   loading: boolean;
   error: string;
+  reload: () => void;
 }
 
 function useCatalogList<T>(path: string): CatalogResult<T> {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const res = await apiFetch<T[]>(path);
-        if (active) setData(res);
+        if (active) {
+          setData(res);
+          setError('');
+        }
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : 'No se pudo cargar el catálogo');
       } finally {
@@ -28,9 +39,14 @@ function useCatalogList<T>(path: string): CatalogResult<T> {
     return () => {
       active = false;
     };
-  }, [path]);
+  }, [path, reloadToken]);
 
-  return { data, loading, error };
+  const reload = () => {
+    setLoading(true);
+    setReloadToken((t) => t + 1);
+  };
+
+  return { data, loading, error, reload };
 }
 
 export function useCustomers() {
@@ -47,6 +63,10 @@ export function useVehicles() {
 
 export function useDeposits() {
   return useCatalogList<DepositSummary>('/api/deposits');
+}
+
+export function usePendingShipments() {
+  return useCatalogList<ShipmentDelayRisk>('/api/shipments/pending');
 }
 
 export function driverName(driver: DriverSummary) {
