@@ -15,6 +15,23 @@ public class RouteTests
     }
 
     [Fact]
+    public void Create_DoesNotShareOriginInstance()
+    {
+        // Two routes created from the same Coordinate must not share the instance, or EF Core's
+        // owned type mapping writes NULL for one of them.
+        var origin = new Coordinate(10, 10);
+
+        var first = Route.Create(origin);
+        var second = Route.Create(origin);
+
+        Assert.NotSame(origin, first.Origin);
+        Assert.NotSame(origin, second.Origin);
+        Assert.NotSame(first.Origin, second.Origin);
+        Assert.Equal(origin, first.Origin);
+        Assert.Equal(origin, second.Origin);
+    }
+
+    [Fact]
     public void AssignDriver_SetsDriver()
     {
         var driver = new Driver();

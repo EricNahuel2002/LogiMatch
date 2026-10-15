@@ -63,6 +63,30 @@ public class RouteStopTests
     }
 
     [Fact]
+    public void SetStopOrder_UpdatesOrder()
+    {
+        var shipment = Shipment.Create(
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
+        var stop = RouteStop.Create(shipment, new Coordinate(20, 20), 1);
+
+        stop.SetStopOrder(3);
+
+        Assert.Equal(3, stop.StopOrder);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void SetStopOrder_WithNonPositiveOrder_Throws(int stopOrder)
+    {
+        var shipment = Shipment.Create(
+            Order.Create(new Customer(), new Admin(), [OrderItem.Create("Item", 10m, 1, 5m)]));
+        var stop = RouteStop.Create(shipment, new Coordinate(20, 20), 1);
+
+        Assert.Throws<ArgumentException>(() => stop.SetStopOrder(stopOrder));
+    }
+
+    [Fact]
     public void AssignToRoute_SetsRoute()
     {
         var route = Route.Create(new Coordinate(10, 10));

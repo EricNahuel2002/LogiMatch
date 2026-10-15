@@ -230,6 +230,45 @@ public class ValidatorsTests
     }
 
     [Fact]
+    public void CommitFromProposalValidator_WhenStopOrdersDuplicate_Fails()
+    {
+        var validator = new CommitFromProposalRequestValidator();
+
+        var result = validator.Validate(new CommitFromProposalRequest([
+            new CommitProposalAssignmentRequest(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                [
+                    new CommitProposalStopRequest(Guid.NewGuid(), 1),
+                    new CommitProposalStopRequest(Guid.NewGuid(), 1)
+                ])
+        ]));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Assignments[0].Stops");
+    }
+
+    [Fact]
+    public void CommitFromProposalValidator_WhenStopOrdersDistinct_Passes()
+    {
+        var validator = new CommitFromProposalRequestValidator();
+
+        var result = validator.Validate(new CommitFromProposalRequest([
+            new CommitProposalAssignmentRequest(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                [
+                    new CommitProposalStopRequest(Guid.NewGuid(), 1),
+                    new CommitProposalStopRequest(Guid.NewGuid(), 2)
+                ])
+        ]));
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
     public void RegisterDeliveryAttemptValidator_WhenNoteTooLong_Fails()
     {
         var validator = new RegisterDeliveryAttemptValidator();

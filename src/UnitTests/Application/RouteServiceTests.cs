@@ -113,4 +113,56 @@ public class RouteServiceTests
         Assert.Equal(route.Id, stop.RouteId);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task CommitFromProposalAsync_AppliesProposalStopOrderToEachStop()
+    {
+        // Both stops were created with order 1, as the UI creates them before a route exists. The
+        // proposal, not the stale stop, decides the sequence the route is persisted with.
+        var first = BuildPendingShipment();
+        var second = BuildPendingShipment();
+        var firstStop = RouteStop.Create(first, new Coordinate(1, 1), 1);
+        var secondStop = RouteStop.Create(second, new Coordinate(2, 2), 1);
+
+        var driver = new Driver();
+        var vehicle = Vehicle.Create("ABC123", 1000m);
+        var deposit = Deposit.Create("Central", new Coordinate(-34.6m, -58.4m));
+
+        _users.Setup(u => u.GetDriverByIdAsync(driver.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(driver);
+        _vehicles.Setup(v => v.GetByIdAsync(vehicle.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(vehicle);
+        _deposits.Setup(d => d.GetByIdAsync(deposit.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(deposit);
+        _routeStops.Setup(r => r.GetByShipmentIdAsync(first.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(firstStop);
+        _routeStops.Setup(r => r.GetByShipmentIdAsync(second.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(secondStop);
+
+        Route? created = null;
+        _routes.Setup(r => r.AddAsync(It.IsAny<Route>(), It.IsAny<CancellationToken>()))
+            .Callback<Route, CancellationToken>((route, _) => created = route)
+            .Returns(Task.CompletedTask);
+
+        var request = new CommitFromProposalRequest([
+            new CommitProposalAssignmentRequest(
+                driver.Id,
+                vehicle.Id,
+                deposit.Id,
+                [
+                    new CommitProposalStopRequest(second.Id, 2),
+                    new CommitProposalStopRequest(first.Id, 1)
+                ])
+        ]);
+
+        var service = CreateService();
+        await service.CommitFromProposalAsync(request);
+
+        Assert.NotNull(created);
+        Assert.Equal(
+            [1, 2],
+            created!.RouteStops.OrderBy(s => s.StopOrder).Select(s => s.StopOrder));
+        Assert.Equal(1, firstStop.StopOrder);
+        Assert.Equal(2, secondStop.StopOrder);
+    }
 }

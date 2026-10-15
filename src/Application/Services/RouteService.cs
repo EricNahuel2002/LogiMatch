@@ -156,6 +156,7 @@ public class RouteService : IRouteService
                 var routeStop = await _routeStops.GetByShipmentIdAsync(stop.ShipmentId, cancellationToken)
                     ?? throw new NotFoundException(nameof(RouteStop), stop.ShipmentId);
 
+                routeStop.SetStopOrder(stop.StopOrder);
                 routeStop.AssignToRoute(route);
                 route.AddStop(routeStop);
                 routeStopIds.Add(routeStop.Id);

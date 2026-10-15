@@ -58,6 +58,20 @@ public class RouteStop : BaseEntity
         };
     }
 
+    /// <summary>
+    /// Sets the position of the stop inside its route. Used when a planner commits a proposal,
+    /// where the planned sequence replaces whatever order the stop happened to be created with.
+    /// </summary>
+    public void SetStopOrder(int stopOrder)
+    {
+        if (stopOrder <= 0)
+        {
+            throw new ArgumentException("Stop order must be greater than zero.", nameof(stopOrder));
+        }
+
+        StopOrder = stopOrder;
+    }
+
     public void AssignToRoute(Route route)
     {
         ArgumentNullException.ThrowIfNull(route);

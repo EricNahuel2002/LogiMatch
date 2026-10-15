@@ -29,6 +29,11 @@ public class CommitFromProposalRequestValidator : AbstractValidator<CommitFromPr
             assignment.RuleFor(a => a.DepositId).NotEmpty();
             assignment.RuleFor(a => a.Stops).NotEmpty();
 
+            assignment.RuleFor(a => a.Stops)
+                .Must(stops => stops.Select(s => s.StopOrder).Distinct().Count() == stops.Length)
+                .WithMessage("Stops within a route must have distinct orders.")
+                .When(a => a.Stops is not null);
+
             assignment.RuleForEach(a => a.Stops).ChildRules(stop =>
             {
                 stop.RuleFor(s => s.ShipmentId).NotEmpty();

@@ -24,7 +24,15 @@ public class Route : BaseEntity
 
     public ICollection<RouteStop> RouteStops { get; private set; } = [];
 
-    public static Route Create(Coordinate origin) => new() { Origin = origin };
+    public static Route Create(Coordinate origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+
+        // Origin is mapped as an owned type, and an owned instance cannot belong to two routes.
+        // Copying keeps two routes created from the same Coordinate (for example the same deposit)
+        // independent instead of leaving one of them with NULL origin columns.
+        return new() { Origin = new Coordinate(origin.Latitude, origin.Longitude) };
+    }
 
     public void AssignDriver(Driver driver)
     {

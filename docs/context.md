@@ -27,14 +27,18 @@ lanzan `InvalidOperationException` (→ 409 en la API).
 - **`Entities/ShipmentHistory.cs`** — auditoría de transiciones de estado.
 - **`Entities/OrderItem.cs`** — línea de pedido (creación valida nombre, cantidad >0, precio ≥0 y
   `WeightKg` >0).
-- **`Entities/Route.cs`** — agregado de rutas con origen `Origin: Coordinate`; `AssignDriver`,
+- **`Entities/Route.cs`** — agregado de rutas con origen `Origin: Coordinate`; `Create(origin)` copia
+  la coordenada (los owned types de EF no pueden compartir una instancia entre dos rutas: dos rutas
+  desde el mismo depósito dejan `Origin_Latitude` NULL en la segunda); `AssignDriver`,
   `AssignVehicle`, `AddStop` (prohíbe `StopOrder` ≤0 o duplicados) y `Deactivate(reason)`
   (marca inactiva y guarda `CancellationReason`; falla si ya lo está). Nota: `Route.AddStop` no fija
   `RouteId` a la parada; eso lo hace `RouteStop.AssignToRoute` (invocado por `RouteService.AddStopAsync`).
 - **`Entities/RouteStop.cs`** — parada ligada a un `Shipment` con `RouteId` nullable (puede existir
   sin ruta asignada); `Create(shipment, coordinate, stopOrder, name, distanceMeters, tollCost)` fija
-  la `Coordinate` destino y los costos de operación (`DistanceMeters`, `TollCost`, ambos ≥0),
-  `AssignToRoute` fija la navegación. La distancia/peaje alimentan la calculadora de costos.
+  la   `Coordinate` destino y los costos de operación (`DistanceMeters`, `TollCost`, ambos ≥0),
+  `AssignToRoute` fija la navegación y `SetStopOrder` (≥1) reasigna la posición (lo usa el commit de
+  una propuesta para imponer la secuencia planificada). La distancia/peaje alimentan la calculadora
+  de costos.
 - **`Entities/Vehicle.cs`** — vehículo con capacidad, estado activo (`SetActive`) y costos de
   operación (`FuelConsumption` en L/km, `FuelPrice` en $/L y `MaintenanceCost`, configurados en el
   factory/`SetOperatingCosts`, todos ≥0). Lleva `KilometersPerDay`, la navegación `Routes` y
@@ -76,7 +80,10 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
     `Shipment`, ver Domain). `RegisterDeliveryAttemptAsync` usa `GetByIdWithDetailsAsync`
     (carga Order + DeliveryAttempts).
   - `OrderService` — crear orden (valida cliente y admin), añadir items, asignar driver.
-  - `RouteService` — crear ruta, asignar conductor/vehículo, `AddStopAsync`.
+  - `RouteService` — crear ruta, asignar conductor/vehículo, `AddStopAsync` y
+    `CommitFromProposalAsync`: por cada ruta de la propuesta crea la `Route`, resuelve cada parada
+    por `ShipmentId` y **le impone el `StopOrder` planificado** (`RouteStop.SetStopOrder`) antes de
+    `AddStop`, de modo que la secuencia del solver queda persistida y no la del stop preexistente.
   - `RouteStopService` — crear parada por `Address` (la geocodifica con `IGeocodingClient`)
     validando que el envío exista; registra `DistanceMeters` y `TollCost` del request.
   - `DriverService` — `UpdateLocationAsync`: valida la coordenada, carga el driver y fija su
@@ -165,7 +172,8 @@ validator FluentValidation → repositorio → `IUnitOfWork.SaveChangesAsync`.
   `ValidateAndThrowAsync` (no son decorativos). `Common/NoteValidation.cs` centraliza notas.
   `PlanRoutesRequestValidator` exige al menos una selección y drivers/vehículos no vacíos y sin
   **duplicados**; `DepositId` acepta `null` (elección automática) pero rechaza `Guid.Empty`
-  (los depósitos sí se pueden compartir entre rutas).
+  (los depósitos sí se pueden compartir entre rutas). `CommitFromProposalRequestValidator` exige
+  `StopOrder` >0 y **sin duplicados dentro de cada ruta** (además de driver/vehículo/envío únicos).
 - **`Exceptions/NotFoundException.cs`** — entidad no encontrada (→ 404 en la API).
 - **`DependencyInjection.cs`** — `AddApplication()` registra servicios + validators (escaneo de ensamblado).
 
