@@ -1,5 +1,6 @@
 using Application.Dtos.Routes;
 using Application.Exceptions;
+using Application.Integrations;
 using Application.Persistence;
 using Domain.Entities;
 using Domain.ValueObjects;
@@ -15,6 +16,7 @@ public class RouteService : IRouteService
     private readonly IVehicleRepository _vehicles;
     private readonly IDepositRepository _deposits;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDriverRealtimeNotifier _realtimeNotifier;
     private readonly IValidator<CreateRouteRequest> _createRouteValidator;
     private readonly IValidator<CommitFromProposalRequest> _commitFromProposalValidator;
 
@@ -25,6 +27,7 @@ public class RouteService : IRouteService
         IVehicleRepository vehicles,
         IDepositRepository deposits,
         IUnitOfWork unitOfWork,
+        IDriverRealtimeNotifier realtimeNotifier,
         IValidator<CreateRouteRequest> createRouteValidator,
         IValidator<CommitFromProposalRequest> commitFromProposalValidator)
     {
@@ -34,6 +37,7 @@ public class RouteService : IRouteService
         _vehicles = vehicles;
         _deposits = deposits;
         _unitOfWork = unitOfWork;
+        _realtimeNotifier = realtimeNotifier;
         _createRouteValidator = createRouteValidator;
         _commitFromProposalValidator = commitFromProposalValidator;
     }
@@ -60,6 +64,8 @@ public class RouteService : IRouteService
         route.AssignDriver(driver);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _realtimeNotifier.RouteAssignedAsync(driverId, route.Id, cancellationToken);
     }
 
     public async Task AssignVehicleAsync(Guid routeId, Guid vehicleId, CancellationToken cancellationToken = default)
@@ -160,6 +166,11 @@ public class RouteService : IRouteService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        foreach (var route in committed)
+        {
+            await _realtimeNotifier.RouteAssignedAsync(route.DriverId, route.RouteId, cancellationToken);
+        }
 
         return new CommitFromProposalResponse(committed.ToArray());
     }

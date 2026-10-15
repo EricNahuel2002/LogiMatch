@@ -3,6 +3,7 @@ using Application.Exceptions;
 using Application.Persistence;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Services;
 using FluentValidation;
 
 namespace Application.Services;
@@ -12,6 +13,7 @@ public class ShipmentService : IShipmentService
     private readonly IShipmentRepository _shipments;
     private readonly IOrderRepository _orders;
     private readonly IRouteStopRepository _routeStops;
+    private readonly IRouteRepository _routes;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IShipmentPriorityAssignmentService _priorityAssignment;
     private readonly IValidator<StopShipmentRequest> _stopValidator;
@@ -24,6 +26,7 @@ public class ShipmentService : IShipmentService
         IShipmentRepository shipments,
         IOrderRepository orders,
         IRouteStopRepository routeStops,
+        IRouteRepository routes,
         IUnitOfWork unitOfWork,
         IShipmentPriorityAssignmentService priorityAssignment,
         IValidator<StopShipmentRequest> stopValidator,
@@ -35,6 +38,7 @@ public class ShipmentService : IShipmentService
         _shipments = shipments;
         _orders = orders;
         _routeStops = routeStops;
+        _routes = routes;
         _unitOfWork = unitOfWork;
         _priorityAssignment = priorityAssignment;
         _stopValidator = stopValidator;
@@ -74,9 +78,23 @@ public class ShipmentService : IShipmentService
         return shipment.Id;
     }
 
-    public async Task StartAsync(Guid shipmentId, CancellationToken cancellationToken = default)
+    public async Task StartAsync(Guid driverId, Guid shipmentId, CancellationToken cancellationToken = default)
     {
         var shipment = await GetShipmentAsync(shipmentId, cancellationToken);
+
+        var route = await _routes.GetActiveByDriverIdAsync(driverId, cancellationToken)
+            ?? throw new InvalidOperationException(
+                "The driver has no active route, so no shipment can be started.");
+
+        var progress = route.RouteStops
+            .Select(stop => new RouteStopProgress(stop.ShipmentId, stop.StopOrder, stop.Shipment.Status))
+            .ToList();
+
+        if (!RouteSequencePolicy.IsCurrentStop(progress, shipmentId))
+        {
+            throw new InvalidOperationException(
+                "A shipment can only be started when it is the current stop of the driver's route.");
+        }
 
         shipment.Start();
 

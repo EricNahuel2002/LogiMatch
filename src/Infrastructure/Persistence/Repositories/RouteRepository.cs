@@ -27,6 +27,11 @@ public class RouteRepository : IRouteRepository
             .Include(r => r.RouteStops)
                 .ThenInclude(rs => rs.Shipment)
                     .ThenInclude(s => s.Order)
+                        .ThenInclude(o => o.Customer)
+            .Include(r => r.RouteStops)
+                .ThenInclude(rs => rs.Shipment)
+                    .ThenInclude(s => s.Order)
+                        .ThenInclude(o => o.Items)
             .FirstOrDefaultAsync(cancellationToken);
     }
 

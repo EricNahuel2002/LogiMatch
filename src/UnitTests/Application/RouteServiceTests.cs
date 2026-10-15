@@ -1,4 +1,5 @@
 using Application.Dtos.Routes;
+using Application.Integrations;
 using Application.Persistence;
 using Application.Services;
 using Domain.Entities;
@@ -16,6 +17,7 @@ public class RouteServiceTests
     private readonly Mock<IVehicleRepository> _vehicles = new();
     private readonly Mock<IDepositRepository> _deposits = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
+    private readonly Mock<IDriverRealtimeNotifier> _realtimeNotifier = new();
     private readonly Mock<IValidator<CreateRouteRequest>> _createRouteValidator =
         FluentValidationMocks.AlwaysValid<CreateRouteRequest>();
     private readonly Mock<IValidator<CommitFromProposalRequest>> _commitFromProposalValidator =
@@ -30,6 +32,7 @@ public class RouteServiceTests
             _vehicles.Object,
             _deposits.Object,
             _unitOfWork.Object,
+            _realtimeNotifier.Object,
             _createRouteValidator.Object,
             _commitFromProposalValidator.Object);
     }

@@ -3,6 +3,7 @@ using Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Api.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Api.Controllers;
 
@@ -79,7 +80,13 @@ public sealed class ShipmentsController : ControllerBase
     [Authorize(Policy = Policies.DriverOnly)]
     public async Task<IActionResult> Start(Guid shipmentId, CancellationToken cancellationToken)
     {
-        await _shipmentService.StartAsync(shipmentId, cancellationToken);
+        var driverIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(driverIdClaim, out var driverId))
+        {
+            return Unauthorized();
+        }
+
+        await _shipmentService.StartAsync(driverId, shipmentId, cancellationToken);
 
         return NoContent();
     }

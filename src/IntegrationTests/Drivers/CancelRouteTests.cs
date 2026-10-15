@@ -233,6 +233,8 @@ public class CancelRouteTests
         var customer = await db.Users.OfType<Customer>().FirstAsync();
         var admin = await db.Users.OfType<Admin>().FirstAsync();
 
+        await TestDataBuilder.DeactivateActiveRoutesAsync(db, driver.Id);
+
         var route = Route.Create(new Coordinate(-34.6082m, -58.3784m));
         route.AssignDriver(driver);
 

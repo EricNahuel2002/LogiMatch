@@ -20,6 +20,7 @@ public class DriverServiceTests
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<IEmailSender> _emailSender = new();
     private readonly Mock<IShipmentPriorityAssignmentService> _priorityAssignment = new();
+    private readonly Mock<IDriverRealtimeNotifier> _realtimeNotifier = new();
     private readonly Mock<IValidator<UpdateDriverLocationRequest>> _updateLocationValidator =
         FluentValidationMocks.AlwaysValid<UpdateDriverLocationRequest>();
     private readonly Mock<IValidator<CancelRouteRequest>> _cancelRouteValidator =
@@ -35,6 +36,7 @@ public class DriverServiceTests
             _unitOfWork.Object,
             _emailSender.Object,
             _priorityAssignment.Object,
+            _realtimeNotifier.Object,
             _updateLocationValidator.Object,
             _cancelRouteValidator.Object);
     }

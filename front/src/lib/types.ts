@@ -214,10 +214,32 @@ export interface RouteDetails {
   updatedAt?: string | null;
 }
 
+export interface DriverOrderItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface DriverRouteStop {
+  routeStopId: string;
+  shipmentId: string;
+  stopOrder: number;
+  name?: string | null;
+  latitude: number;
+  longitude: number;
+  status: ShipmentStatus;
+  customerName?: string | null;
+  isCurrent: boolean;
+  items: DriverOrderItem[];
+}
+
 export interface DriverRouteCurrent {
   routeId: string;
   isActive: boolean;
   vehicleId?: string | null;
+  originLatitude: number;
+  originLongitude: number;
+  stops: DriverRouteStop[];
   createdAt: string;
 }
 

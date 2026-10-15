@@ -4,6 +4,7 @@ using Application.Persistence;
 using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.ValueObjects;
 using FluentValidation;
 using Moq;
 
@@ -14,6 +15,7 @@ public class ShipmentServiceTests
     private readonly Mock<IShipmentRepository> _shipments = new();
     private readonly Mock<IOrderRepository> _orders = new();
     private readonly Mock<IRouteStopRepository> _routeStops = new();
+    private readonly Mock<IRouteRepository> _routes = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<IShipmentPriorityAssignmentService> _priorityAssignment = new();
     private readonly Mock<IValidator<StopShipmentRequest>> _stopValidator =
@@ -33,6 +35,7 @@ public class ShipmentServiceTests
             _shipments.Object,
             _orders.Object,
             _routeStops.Object,
+            _routes.Object,
             _unitOfWork.Object,
             _priorityAssignment.Object,
             _stopValidator.Object,
@@ -100,17 +103,72 @@ public class ShipmentServiceTests
     }
 
     [Fact]
-    public async Task StartAsync_StartsShipmentAndSaves()
+    public async Task StartAsync_WhenShipmentIsCurrentStop_StartsShipmentAndSaves()
+    {
+        var shipment = BuildPendingShipment();
+        var (route, driver) = BuildActiveRoute((shipment, 1));
+
+        _shipments.Setup(r => r.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(shipment);
+        _routes.Setup(r => r.GetActiveByDriverIdAsync(driver.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(route);
+
+        var service = CreateService();
+        await service.StartAsync(driver.Id, shipment.Id);
+
+        Assert.Equal(ShipmentStatus.InProgress, shipment.Status);
+        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenShipmentIsNotCurrentStop_ThrowsAndDoesNotSave()
+    {
+        var first = BuildPendingShipment();
+        var second = BuildPendingShipment();
+        var (route, driver) = BuildActiveRoute((first, 1), (second, 2));
+
+        _shipments.Setup(r => r.GetByIdAsync(second.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(second);
+        _routes.Setup(r => r.GetActiveByDriverIdAsync(driver.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(route);
+
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartAsync(driver.Id, second.Id));
+        Assert.Equal(ShipmentStatus.Pending, second.Status);
+        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenDriverHasNoActiveRoute_ThrowsAndDoesNotSave()
     {
         var shipment = BuildPendingShipment();
         _shipments.Setup(r => r.GetByIdAsync(shipment.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(shipment);
+        _routes.Setup(r => r.GetActiveByDriverIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Route?)null);
 
         var service = CreateService();
-        await service.StartAsync(shipment.Id);
 
-        Assert.Equal(ShipmentStatus.InProgress, shipment.Status);
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartAsync(Guid.NewGuid(), shipment.Id));
+        Assert.Equal(ShipmentStatus.Pending, shipment.Status);
+        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private static (Route Route, Driver Driver) BuildActiveRoute(params (Shipment Shipment, int StopOrder)[] stops)
+    {
+        var driver = new Driver();
+        var route = Route.Create(new Coordinate(0, 0));
+        route.AssignDriver(driver);
+
+        foreach (var (shipment, stopOrder) in stops)
+        {
+            var stop = RouteStop.Create(shipment, new Coordinate(1, 1), stopOrder);
+            stop.AssignToRoute(route);
+            route.AddStop(stop);
+        }
+
+        return (route, driver);
     }
 
     [Fact]

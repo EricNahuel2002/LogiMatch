@@ -4,6 +4,7 @@ using Application.Integrations;
 using Application.Persistence;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Services;
 using Domain.ValueObjects;
 using FluentValidation;
 
@@ -18,6 +19,7 @@ public class DriverService : IDriverService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEmailSender _emailSender;
     private readonly IShipmentPriorityAssignmentService _priorityAssignment;
+    private readonly IDriverRealtimeNotifier _realtimeNotifier;
     private readonly IValidator<UpdateDriverLocationRequest> _updateLocationValidator;
     private readonly IValidator<CancelRouteRequest> _cancelRouteValidator;
 
@@ -29,6 +31,7 @@ public class DriverService : IDriverService
         IUnitOfWork unitOfWork,
         IEmailSender emailSender,
         IShipmentPriorityAssignmentService priorityAssignment,
+        IDriverRealtimeNotifier realtimeNotifier,
         IValidator<UpdateDriverLocationRequest> updateLocationValidator,
         IValidator<CancelRouteRequest> cancelRouteValidator)
     {
@@ -39,6 +42,7 @@ public class DriverService : IDriverService
         _unitOfWork = unitOfWork;
         _emailSender = emailSender;
         _priorityAssignment = priorityAssignment;
+        _realtimeNotifier = realtimeNotifier;
         _updateLocationValidator = updateLocationValidator;
         _cancelRouteValidator = cancelRouteValidator;
     }
@@ -56,7 +60,52 @@ public class DriverService : IDriverService
         {
             return null;
         }
-        return new DriverRouteCurrentDto(route.Id, route.IsActive, route.VehicleId, route.CreatedAt);
+
+        var orderedStops = route.RouteStops
+            .OrderBy(stop => stop.StopOrder)
+            .ToList();
+
+        var progress = orderedStops
+            .Select(stop => new RouteStopProgress(stop.ShipmentId, stop.StopOrder, stop.Shipment.Status))
+            .ToList();
+
+        var currentShipmentId = RouteSequencePolicy.GetCurrentStopShipmentId(progress);
+
+        var stops = orderedStops
+            .Select(stop => new DriverRouteStopDto(
+                stop.Id,
+                stop.ShipmentId,
+                stop.StopOrder,
+                stop.Name,
+                stop.Coordinate.Latitude,
+                stop.Coordinate.Longitude,
+                stop.Shipment.Status,
+                FormatCustomerName(stop.Shipment.Order.Customer),
+                stop.ShipmentId == currentShipmentId,
+                stop.Shipment.Order.Items
+                    .Select(item => new DriverOrderItemDto(item.Name, item.Quantity, item.Price))
+                    .ToList()))
+            .ToList();
+
+        return new DriverRouteCurrentDto(
+            route.Id,
+            route.IsActive,
+            route.VehicleId,
+            route.Origin.Latitude,
+            route.Origin.Longitude,
+            stops,
+            route.CreatedAt);
+    }
+
+    private static string? FormatCustomerName(Customer? customer)
+    {
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var name = $"{customer.Name} {customer.Surname}".Trim();
+        return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 
     public async Task<IReadOnlyList<DriverShipmentDto>> GetShipmentsAsync(Guid driverId, CancellationToken cancellationToken = default)
@@ -111,6 +160,8 @@ public class DriverService : IDriverService
         route.Deactivate(request.Reason);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _realtimeNotifier.RouteCancelledAsync(driverId, route.Id, cancellationToken);
 
         if (requeuedShipments.Count > 0)
         {

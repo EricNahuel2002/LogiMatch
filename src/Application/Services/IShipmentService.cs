@@ -9,7 +9,7 @@ public interface IShipmentService
 
     Task<Guid> CreateAsync(Guid orderId, bool urgent = false, CancellationToken cancellationToken = default);
 
-    Task StartAsync(Guid shipmentId, CancellationToken cancellationToken = default);
+    Task StartAsync(Guid driverId, Guid shipmentId, CancellationToken cancellationToken = default);
 
     Task StopAsync(Guid shipmentId, StopShipmentRequest request, CancellationToken cancellationToken = default);
 

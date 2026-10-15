@@ -63,9 +63,12 @@ public class ShipmentLifecycleTests
     public async Task Start_StartsShipment()
     {
         using var arrange = _fixture.Factory.OpenDatabaseAsync();
+        var driver = await arrange.Db.Users.OfType<Driver>()
+            .SingleAsync(d => d.Email == ApiWebApplicationFactory.DriverEmail);
         var shipment = await TestDataBuilder.CreatePendingShipmentAsync(
             arrange.Db,
             [OrderItem.Create("Item", 10m, 1, 5m)]);
+        await TestDataBuilder.CreateActiveRouteAsync(arrange.Db, driver.Id, (shipment.Id, 1));
 
         using var client = await _fixture.Factory.CreateAuthorizedClientAsync(
             ApiWebApplicationFactory.DriverEmail,
@@ -87,12 +90,67 @@ public class ShipmentLifecycleTests
     }
 
     [Fact]
-    public async Task Start_AlreadyInProgress_ReturnsConflict()
+    public async Task Start_OutOfOrderStop_ReturnsConflict()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+        var driver = await arrange.Db.Users.OfType<Driver>()
+            .SingleAsync(d => d.Email == ApiWebApplicationFactory.DriverEmail);
+        var first = await TestDataBuilder.CreatePendingShipmentAsync(
+            arrange.Db,
+            [OrderItem.Create("Item", 10m, 1, 5m)]);
+        var second = await TestDataBuilder.CreatePendingShipmentAsync(
+            arrange.Db,
+            [OrderItem.Create("Item", 10m, 1, 5m)]);
+        await TestDataBuilder.CreateActiveRouteAsync(
+            arrange.Db,
+            driver.Id,
+            (first.Id, 1),
+            (second.Id, 2));
+
+        using var client = await _fixture.Factory.CreateAuthorizedClientAsync(
+            ApiWebApplicationFactory.DriverEmail,
+            ApiWebApplicationFactory.UsersPassword);
+
+        var response = await client.PostAsync(
+            $"/api/shipments/{second.Id}/start",
+            content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        using var verify = _fixture.Factory.OpenDatabaseAsync();
+        var stored = await verify.Db.Shipments.SingleAsync(s => s.Id == second.Id);
+        Assert.Equal(ShipmentStatus.Pending, stored.Status);
+    }
+
+    [Fact]
+    public async Task Start_WithoutRoute_ReturnsConflict()
     {
         using var arrange = _fixture.Factory.OpenDatabaseAsync();
         var shipment = await TestDataBuilder.CreatePendingShipmentAsync(
             arrange.Db,
             [OrderItem.Create("Item", 10m, 1, 5m)]);
+
+        using var client = await _fixture.Factory.CreateAuthorizedClientAsync(
+            ApiWebApplicationFactory.DriverEmail,
+            ApiWebApplicationFactory.UsersPassword);
+
+        var response = await client.PostAsync(
+            $"/api/shipments/{shipment.Id}/start",
+            content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Start_AlreadyInProgress_ReturnsConflict()
+    {
+        using var arrange = _fixture.Factory.OpenDatabaseAsync();
+        var driver = await arrange.Db.Users.OfType<Driver>()
+            .SingleAsync(d => d.Email == ApiWebApplicationFactory.DriverEmail);
+        var shipment = await TestDataBuilder.CreatePendingShipmentAsync(
+            arrange.Db,
+            [OrderItem.Create("Item", 10m, 1, 5m)]);
+        await TestDataBuilder.CreateActiveRouteAsync(arrange.Db, driver.Id, (shipment.Id, 1));
         shipment.Start();
         await arrange.Db.SaveChangesAsync();
 

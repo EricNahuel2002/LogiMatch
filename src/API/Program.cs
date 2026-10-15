@@ -2,8 +2,11 @@ using System.Text;
 using Api.Auth;
 using Api.Authorization;
 using Api.Extensions;
+using Api.Hubs;
 using Api.Middleware;
+using Api.Realtime;
 using Application;
+using Application.Integrations;
 using Application.Services;
 using Domain.Entities;
 using Hangfire;
@@ -47,6 +50,23 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+
+        // Browsers cannot set the Authorization header on the WebSocket handshake, so SignalR
+        // clients pass the JWT through the access_token query string for the hub endpoints only.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken)
+                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services
@@ -55,6 +75,8 @@ builder.Services
     .AddPolicy(Policies.DriverOnly, policy => policy.RequireRole("Driver"));
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IDriverRealtimeNotifier, SignalRDriverRealtimeNotifier>();
 builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
 builder.Services.AddOpenApi(options =>
 {
@@ -167,6 +189,7 @@ if (hangfireEnabled)
 app.MapOpenApi();
 app.MapScalarApiReference();
 app.MapControllers();
+app.MapHub<DriverHub>("/hubs/drivers");
 app.MapHealthChecks("/health");
 
 app.MapGet("/", () => "LogiMatch API");
