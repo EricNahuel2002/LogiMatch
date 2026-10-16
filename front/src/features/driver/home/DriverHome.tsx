@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/useToast';
 import { DriverMap } from './DriverMap';
+import type { DriverMapFocus, DriverMapFocusTarget } from './DriverMap';
 import { useGeolocation } from './useGeolocation';
 import { useDriverRealtime } from './useDriverRealtime';
 import { useDriverRoute } from './useDriverRoute';
@@ -37,6 +38,10 @@ export default function DriverHome() {
     DRIVER_SHEET_SNAP_POINTS[DRIVER_SHEET_SNAP_POINTS.length - 1],
   );
   const [sheetContainer, setSheetContainer] = useState<HTMLDivElement | null>(null);
+  const [mapFocus, setMapFocus] = useState<DriverMapFocus | null>(null);
+
+  const focusMap = (target: DriverMapFocusTarget) =>
+    setMapFocus((prev) => ({ target, nonce: (prev?.nonce ?? 0) + 1 }));
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-surface-muted">
@@ -47,7 +52,7 @@ export default function DriverHome() {
         onClick={() => setSheetSnap(DRIVER_SHEET_SNAP_POINTS[0])}
       >
         {mapStops.length > 0 ? (
-          <DriverMap driverPosition={position} stops={mapStops} />
+          <DriverMap driverPosition={position} stops={mapStops} focus={mapFocus} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-muted">
             {route.routeLoading
@@ -61,7 +66,7 @@ export default function DriverHome() {
 
       <div
         ref={setSheetContainer}
-        className="pointer-events-none absolute inset-x-0 bottom-0 top-[120px] z-[1000] overflow-hidden"
+        className="pointer-events-none absolute inset-x-0 bottom-0 top-[168px] z-[1000]"
       />
 
       {sheetContainer && (
@@ -75,6 +80,7 @@ export default function DriverHome() {
           currentStop={route.currentStop}
           upcomingStops={route.upcomingStops}
           error={route.error || geoError || undefined}
+          onFocus={focusMap}
           footer={
             <DriverActionBar
               currentStopActive={Boolean(route.currentStop)}

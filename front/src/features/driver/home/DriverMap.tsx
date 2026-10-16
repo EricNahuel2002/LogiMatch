@@ -1,13 +1,21 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { DriverRouteStop } from '@/lib/types';
 import type { GeoPosition } from './useGeolocation';
 
+export type DriverMapFocusTarget = 'driver' | 'current';
+
+export interface DriverMapFocus {
+  target: DriverMapFocusTarget;
+  nonce: number;
+}
+
 export interface DriverMapProps {
   driverPosition: GeoPosition | null;
   stops: DriverRouteStop[];
+  focus?: DriverMapFocus | null;
 }
 
 const DEFAULT_CENTER: [number, number] = [-34.6082, -58.3784];
@@ -54,11 +62,40 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
+function MapController({
+  focus,
+  driverPosition,
+  currentStop,
+}: {
+  focus?: DriverMapFocus | null;
+  driverPosition: GeoPosition | null;
+  currentStop: DriverRouteStop | null;
+}) {
+  const map = useMap();
+  const latest = useRef({ driverPosition, currentStop });
+
+  useEffect(() => {
+    latest.current = { driverPosition, currentStop };
+  }, [driverPosition, currentStop]);
+
+  useEffect(() => {
+    if (!focus) return;
+    const target =
+      focus.target === 'driver' ? latest.current.driverPosition : latest.current.currentStop;
+    if (!target) return;
+    map.setView([target.latitude, target.longitude], Math.max(map.getZoom(), 15), {
+      animate: true,
+    });
+  }, [map, focus]);
+
+  return null;
+}
+
 export interface DriverMapExtendedProps extends DriverMapProps {
   className?: string;
 }
 
-export function DriverMap({ driverPosition, stops, className }: DriverMapExtendedProps) {
+export function DriverMap({ driverPosition, stops, focus, className }: DriverMapExtendedProps) {
   const currentStop = stops.find((stop) => stop.isCurrent) ?? null;
 
   const stopPoints = useMemo<[number, number][]>(
@@ -119,6 +156,7 @@ export function DriverMap({ driverPosition, stops, className }: DriverMapExtende
         )}
 
         <FitBounds points={stopPoints} />
+        <MapController focus={focus} driverPosition={driverPosition} currentStop={currentStop} />
       </MapContainer>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Drawer } from 'vaul';
 
 import type { DriverRouteStop } from '@/lib/types';
+import type { DriverMapFocusTarget } from './DriverMap';
 import { shipmentStatusLabel, shipmentStatusTone } from '@/lib/shipment';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -19,11 +20,15 @@ export interface DriverSheetProps {
   upcomingStops: DriverRouteStop[];
   error?: string | null;
   footer?: ReactNode;
+  onFocus?: (target: DriverMapFocusTarget) => void;
 }
 
 function stopTitle(stop: DriverRouteStop) {
   return stop.name ?? 'Parada';
 }
+
+const FOCUS_BUTTON_CLASS =
+  'inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/50 bg-surface/95 text-foreground shadow-card backdrop-blur transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50 supports-[backdrop-filter]:bg-surface/90';
 
 export function DriverSheet({
   container,
@@ -36,6 +41,7 @@ export function DriverSheet({
   upcomingStops,
   error,
   footer,
+  onFocus,
 }: DriverSheetProps) {
   const [expandedStopId, setExpandedStopId] = useState<string | null>(null);
   const isPeek = activeSnap === snapPoints[0];
@@ -181,6 +187,53 @@ export function DriverSheet({
             )}
           </div>
           {footer}
+          {onFocus && (
+            <div
+              data-vaul-no-drag
+              className="absolute bottom-full right-3 mb-3 flex flex-col gap-2"
+            >
+              <button
+                type="button"
+                onClick={() => onFocus('driver')}
+                className={FOCUS_BUTTON_CLASS}
+                aria-label="Centrar en mi ubicación"
+                title="Mi ubicación"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="3.5" />
+                  <path d="M12 2v4M12 18v4M2 12h4M18 12h4" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => onFocus('current')}
+                disabled={!currentStop}
+                className={FOCUS_BUTTON_CLASS}
+                aria-label="Centrar en el envío actual"
+                title="Envío actual"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    d="M12 21c4-4.5 6-7.5 6-10.5a6 6 0 1 0-12 0C6 13.5 8 16.5 12 21Z"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="12" cy="10.5" r="2.25" />
+                </svg>
+              </button>
+            </div>
+          )}
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>
