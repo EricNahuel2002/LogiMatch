@@ -54,7 +54,11 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
-export function DriverMap({ driverPosition, stops }: DriverMapProps) {
+export interface DriverMapExtendedProps extends DriverMapProps {
+  className?: string;
+}
+
+export function DriverMap({ driverPosition, stops, className }: DriverMapExtendedProps) {
   const currentStop = stops.find((stop) => stop.isCurrent) ?? null;
 
   const stopPoints = useMemo<[number, number][]>(
@@ -65,11 +69,17 @@ export function DriverMap({ driverPosition, stops }: DriverMapProps) {
   const center: [number, number] = stopPoints[0] ?? DEFAULT_CENTER;
 
   return (
-    <div className="h-72 w-full overflow-hidden rounded-lg border border-border sm:h-80">
+    <div
+      className={`absolute inset-0 isolate w-full h-full ${className ?? ''}`}
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
+    >
       <MapContainer
         center={center}
         zoom={13}
-        scrollWheelZoom={false}
+        scrollWheelZoom
+        zoomControl
         style={{ height: '100%', width: '100%' }}
       >
         <TileLayer

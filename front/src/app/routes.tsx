@@ -43,9 +43,7 @@ export default function AppRoutes() {
       </Route>
 
       <Route element={<RequireAuth roles={['Driver']} />}>
-        <Route element={<AppShell />}>
-          <Route path="/driver" element={<DriverHome />} />
-        </Route>
+        <Route path="/driver" element={<DriverHome />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/login" replace />} />
